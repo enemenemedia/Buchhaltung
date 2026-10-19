@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block titel %}{{ 'Neuer Kunde' if neu else 'Kunde bearbeiten' }} – X-Rechnung für KMU{% endblock %}
+
+{% macro feld(name, label, typ='text', breite='', pflicht=false, hilfe='', attrs='') -%}
+  <label class="feld {{ breite }} {% if fehler.get(name) %}hat-fehler{% endif %}">
+    <span>{{ label }}{% if pflicht %} <em>*</em>{% endif %}</span>
+    <input type="{{ typ }}" name="{{ name }}" value="{{ kunde.get(name, '') or '' }}" {% if pflicht %}required{% endif %} {{ attrs|safe }}>
+    {% if fehler.get(name) %}<small class="fehlertext">{{ fehler[name] }}</small>{% elif hilfe %}<small>{{ hilfe }}</small>{% endif %}
+  </label>
+{%- endmacro %}
+
+{% macro ap_zeile(i, ap, haupt) -%}
+  <fieldset class="ap-karte" data-index="{{ i }}">
+    <input type="hidden" name="ap-{{ i }}-id" value="{{ ap.get('id') or '' }}">
+    <div class="ap-kopf">
+      <label class="haupt"><input type="radio" name="hauptkontakt" value="{{ i }}" {% if haupt %}checked{% endif %}> Hauptkontakt</label>
+      <button type="button" class="knopf-text entfernen" aria-label="Ansprechpartner entfernen">Entfernen</button>
+    </div>
+    <div class="raster">
+      <label class="feld s2"><span>Anrede</span>
+        <select name="ap-{{ i }}-anrede">
+          {% for a in ['', 'Frau', 'Herr', 'Divers'] %}<option {% if ap.get('anrede') == a %}selected{% endif %}>{{ a }}</option>{% endfor %}
+        </select></label>
+      <label class="feld s2"><span>Titel</span><input name="ap-{{ i }}-titel" value="{{ ap.get('titel', '') }}" placeholder="Dr."></label>
+      <label class="feld s4"><span>Vorname</span><input name="ap-{{ i }}-vorname" value="{{ ap.get('vorname', '') }}"></label>
+      <label class="feld s4 {% if fehler.get('ap-' ~ i ~ '-nachname') %}hat-fehler{% endif %}"><span>Nachname <em>*</em></span>
+        <input name="ap-{{ i }}-nachname" value="{{ ap.get('nachname', '') }}">
+        {% if fehler.get('ap-' ~ i ~ '-nachname') %}<small class="fehlertext">{{ fehler['ap-' ~ i ~ '-nachname'] }}</small>{% endif %}</label>
+      <label class="feld s4"><span>Funktion / Abteilung</span><input name="ap-{{ i }}-funktion" value="{{ ap.get('funktion', '') }}" placeholder="z. B. Buchhaltung"></label>
+      <label class="feld s4 {% if fehler.get('ap-' ~ i ~ '-email') %}hat-fehler{% endif %}"><span>E-Mail</span>
+        <input type="email" name="ap-{{ i }}-email" value="{{ ap.get('email', '') }}">
+        {% if fehler.get('ap-' ~ i ~ '-email') %}<small class="fehlertext">{{ fehler['ap-' ~ i ~ '-email'] }}</small>{% endif %}</label>
+      <label class="feld s2"><span>Telefon</span><input type="tel" name="ap-{{ i }}-telefon" value="{{ ap.get('telefon', '') }}"></label>
+      <label class="feld s2"><span>Mobil</span><input type="tel" name="ap-{{ i }}-mobil" value="{{ ap.get('mobil', '') }}"></label>
+    </div>
+  </fieldset>
+{%- endmacro %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+  <h1>{% if neu %}Neuer Kunde{% else %}{{ kunde.firma or 'Kunde' }} <span class="mono gedimmt">{{ kunde.kundennummer }}</span>{% endif %}</h1>
+</div>
+
+<form method="post" class="formular" novalidate>
+  <section class="karte">
+    <h2>Firma</h2>
+    <div class="raster">
+      {{ feld('firma', 'Firmenname', pflicht=true, breite='s12', hilfe='Vollständiger Name inkl. Rechtsform, wie er auf der Rechnung erscheinen soll.') }}
+      {{ feld('ust_id', 'USt-IdNr.', breite='s4', attrs='placeholder="DE123456789"') }}
+      {{ feld('steuernummer', 'Steuernummer', breite='s4') }}
+      {{ feld('leitweg_id', 'Leitweg-ID', breite='s4', hilfe='Nur bei öffentlichen Auftraggebern', attrs='placeholder="04011000-1234512345-06"') }}
+      {{ feld('email', 'E-Mail (Rechnungsempfang)', 'email', breite='s6') }}
+      {{ feld('telefon', 'Telefon', 'tel', breite='s6') }}
+    </div>
+  </section>
+
+  <section class="karte">
+    <h2>Sitz</h2>
+    <div class="raster">
+      {{ feld('strasse', 'Straße und Hausnummer', breite='s8') }}
+      {{ feld('adresszusatz', 'Adresszusatz', breite='s4') }}
+      {{ feld('plz', 'PLZ', breite='s3') }}
+      {{ feld('ort', 'Ort', breite='s6') }}
+      {{ feld('land', 'Land', breite='s3', hilfe='ISO-Code, z. B. DE, AT, CH', attrs='maxlength="2" style="text-transform:uppercase"') }}
+    </div>
+  </section>
+
+  <section class="karte">
+    <div class="karte-kopf">
+      <h2>Ansprechpartner</h2>
+      <button type="button" class="knopf" id="ap-hinzufuegen">+ Ansprechpartner</button>
+    </div>
+    <div id="ap-liste">
+      {% set liste = ansprechpartner if ansprechpartner else [{}] %}
+      {% for ap in liste %}
+        {{ ap_zeile(loop.index0, ap, ap.get('ist_hauptkontakt') or (loop.first and not (liste|selectattr('ist_hauptkontakt')|list))) }}
+      {% endfor %}
+    </div>
+    <p class="hinweis" id="ap-leer" hidden>Kein Ansprechpartner hinterlegt.</p>
+    <template id="ap-vorlage">{{ ap_zeile('__I__', {}, false) }}</template>
+  </section>
+
+  <section class="karte">
+    <h2>Notizen</h2>
+    <label class="feld s12"><span class="sr-only">Notizen</span>
+      <textarea name="notizen" rows="3">{{ kunde.get('notizen', '') or '' }}</textarea></label>
+  </section>
+
+  <div class="aktionen">
+    <a class="knopf" href="{{ url_for('kunden.detail', kunde_id=kunde_id) if not neu else url_for('kunden.liste') }}">Abbrechen</a>
+    <button class="knopf knopf-primaer" type="submit">{{ 'Kunde anlegen' if neu else 'Änderungen speichern' }}</button>
+  </div>
+</form>
+{% endblock %}
+
+{% block skripte %}
+<script src="{{ url_for('static', filename='kunden.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block titel %}{{ kunde.firma }} – X-Rechnung für KMU{% endblock %}
+{% block inhalt %}
+<p class="brotkrumen"><a href="{{ url_for('kunden.liste', status='archiviert' if kunde.archiviert_am else 'aktiv') }}">← Kunden</a></p>
+
+<div class="seitenkopf">
+  <div>
+    <h1>{{ kunde.firma }}</h1>
+    <p class="untertitel"><span class="mono">{{ kunde.kundennummer }}</span> · angelegt am {{ kunde.erstellt_am|datum }}
+      {% if kunde.archiviert_am %}· <span class="marke-status archiv">archiviert am {{ kunde.archiviert_am|datum }}</span>
+      {% else %}· <span class="marke-status aktiv">aktiv</span>{% endif %}</p>
+  </div>
+  <div class="knopfgruppe">
+    {% if not kunde.archiviert_am %}
+      <a class="knopf knopf-primaer" href="{{ url_for('kunden.bearbeiten', kunde_id=kunde.id) }}">Bearbeiten</a>
+      <form method="post" action="{{ url_for('kunden.archivieren', kunde_id=kunde.id) }}"
+            onsubmit="return confirm('Kunde archivieren? Archivierte Kunden sind schreibgeschützt und werden erst nach Ablauf der 10-jährigen Aufbewahrungsfrist löschbar.')">
+        <button class="knopf" type="submit">Archivieren</button>
+      </form>
+    {% else %}
+      <form method="post" action="{{ url_for('kunden.reaktivieren', kunde_id=kunde.id) }}">
+        <button class="knopf knopf-primaer" type="submit">Reaktivieren</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if kunde.archiviert_am %}
+<div class="hinweisbox">
+  Dieser Kunde ist archiviert und schreibgeschützt. Die Daten werden gemäß der gesetzlichen Aufbewahrungsfrist
+  (10 Jahre, § 147 AO / § 257 HGB) aufbewahrt.
+  {% if loeschbar %}
+    Die Frist ist abgelaufen – der Kunde kann endgültig gelöscht werden.
+  {% else %}
+    Endgültiges Löschen ist frühestens ab dem <strong>{{ loeschbar_ab.strftime('%d.%m.%Y') }}</strong> möglich.
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="spalten">
+  <section class="karte">
+    <h2>Firma &amp; Sitz</h2>
+    <dl class="angaben">
+      <dt>Firma</dt><dd>{{ kunde.firma }}</dd>
+      <dt>Anschrift</dt>
+      <dd>{% if kunde.strasse %}{{ kunde.strasse }}<br>{% endif %}
+          {% if kunde.adresszusatz %}{{ kunde.adresszusatz }}<br>{% endif %}
+          {{ kunde.plz }} {{ kunde.ort }}<br>{{ kunde.land }}</dd>
+      {% if kunde.ust_id %}<dt>USt-IdNr.</dt><dd class="mono">{{ kunde.ust_id }}</dd>{% endif %}
+      {% if kunde.steuernummer %}<dt>Steuernummer</dt><dd class="mono">{{ kunde.steuernummer }}</dd>{% endif %}
+      {% if kunde.leitweg_id %}<dt>Leitweg-ID</dt><dd class="mono">{{ kunde.leitweg_id }}</dd>{% endif %}
+      {% if kunde.email %}<dt>E-Mail</dt><dd><a href="mailto:{{ kunde.email }}">{{ kunde.email }}</a></dd>{% endif %}
+      {% if kunde.telefon %}<dt>Telefon</dt><dd><a href="tel:{{ kunde.telefon }}">{{ kunde.telefon }}</a></dd>{% endif %}
+      {% if kunde.notizen %}<dt>Notizen</dt><dd class="umbruch">{{ kunde.notizen }}</dd>{% endif %}
+    </dl>
+  </section>
+
+  <section class="karte">
+    <h2>Ansprechpartner <span class="gedimmt">({{ ansprechpartner|length }})</span></h2>
+    {% for ap in ansprechpartner %}
+      <div class="kontakt">
+        <div class="kontakt-name">
+          {{ ap.anrede }} {{ ap.titel }} {{ ap.vorname }} {{ ap.nachname }}
+          {% if ap.ist_hauptkontakt %}<span class="marke-status aktiv">Hauptkontakt</span>{% endif %}
+        </div>
+        {% if ap.funktion %}<div class="gedimmt">{{ ap.funktion }}</div>{% endif %}
+        <div class="kontakt-wege">
+          {% if ap.email %}<a href="mailto:{{ ap.email }}">{{ ap.email }}</a>{% endif %}
+          {% if ap.telefon %}<a href="tel:{{ ap.telefon }}">Tel. {{ ap.telefon }}</a>{% endif %}
+          {% if ap.mobil %}<a href="tel:{{ ap.mobil }}">Mobil {{ ap.mobil }}</a>{% endif %}
+        </div>
+      </div>
+    {% else %}
+      <p class="gedimmt">Kein Ansprechpartner hinterlegt.</p>
+    {% endfor %}
+  </section>
+</div>
+
+<section class="karte">
+  <h2>Ablage</h2>
+  <p class="gedimmt">Angebote, Rechnungen und Dokumente dieses Kunden werden hier abgelegt:</p>
+  <p class="mono pfad">{{ ordner }}</p>
+</section>
+
+<section class="karte">
+  <h2>Änderungsprotokoll</h2>
+  <ol class="protokoll">
+  {% for e in protokoll %}
+    <li>
+      <time>{{ e.zeitpunkt|datum(true) }}</time>
+      <strong>{{ {'angelegt': 'Angelegt', 'geaendert': 'Geändert', 'archiviert': 'Archiviert',
+                  'reaktiviert': 'Reaktiviert', 'geloescht': 'Gelöscht'}.get(e.aktion, e.aktion) }}</strong>
+      {% if e.details.felder %}
+        <ul>{% for feld, werte in e.details.felder.items() %}
+          <li>{{ feld }}: <del>{{ werte[0] or '–' }}</del> → <ins>{{ werte[1] or '–' }}</ins></li>
+        {% endfor %}</ul>
+      {% endif %}
+      {% if e.details.ansprechpartner %}
+        <ul>{% for t in e.details.ansprechpartner %}<li>{{ t }}</li>{% endfor %}</ul>
+      {% endif %}
+      {% if e.aktion == 'archiviert' and e.details.loeschbar_ab %}
+        <ul><li>löschbar ab {{ e.details.loeschbar_ab|datum }}</li></ul>
+      {% endif %}
+    </li>
+  {% endfor %}
+  </ol>
+</section>
+
+{% if kunde.archiviert_am %}
+<section class="karte gefahr">
+  <h2>Endgültig löschen</h2>
+  {% if loeschbar %}
+    <p>Löscht den Kunden, alle Ansprechpartner und den Ablageordner unwiderruflich. Der Löschvorgang wird im Protokoll vermerkt.</p>
+    <form method="post" action="{{ url_for('kunden.loeschen', kunde_id=kunde.id) }}" class="loeschformular">
+      <label class="feld"><span>Zur Bestätigung Kundennummer <span class="mono">{{ kunde.kundennummer }}</span> eingeben</span>
+        <input name="bestaetigung" autocomplete="off"></label>
+      <button class="knopf knopf-gefahr" type="submit">Endgültig löschen</button>
+    </form>
+  {% else %}
+    <p class="gedimmt">Gesperrt bis {{ loeschbar_ab.strftime('%d.%m.%Y') }} (Aufbewahrungsfrist).</p>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

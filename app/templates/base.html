@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titel %}X-Rechnung für KMU{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="kopf">
+    <div class="kopf-innen">
+      <a class="marke" href="{{ url_for('start') }}">X-Rechnung <span>für KMU</span></a>
+      <nav class="hauptnav">
+        <span class="nav-inaktiv" title="folgt">Stammdaten</span>
+        <a href="{{ url_for('kunden.liste') }}" class="{% if request.blueprint == 'kunden' %}aktiv{% endif %}">Kunden</a>
+        <span class="nav-inaktiv" title="folgt">Leistungen</span>
+        <span class="nav-inaktiv" title="folgt">Angebote</span>
+        <span class="nav-inaktiv" title="folgt">Rechnungen</span>
+      </nav>
+    </div>
+  </header>
+
+  <main class="inhalt">
+    {% with meldungen = get_flashed_messages(with_categories=true) %}
+      {% for art, text in meldungen %}
+        <div class="meldung meldung-{{ art }}" role="status">{{ text }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% block inhalt %}{% endblock %}
+  </main>
+  {% block skripte %}{% endblock %}
+</body>
+</html>

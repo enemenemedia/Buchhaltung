@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block titel %}Kunden – X-Rechnung für KMU{% endblock %}
+{% block inhalt %}
+<div class="seitenkopf">
+  <h1>Kunden</h1>
+  <a class="knopf knopf-primaer" href="{{ url_for('kunden.neu') }}">+ Neuer Kunde</a>
+</div>
+
+<form class="filterleiste" method="get">
+  <input type="search" name="q" value="{{ suche }}" placeholder="Firma, Kundennr., Ort oder Ansprechpartner suchen" aria-label="Suche">
+  <div class="segmente" role="radiogroup" aria-label="Status">
+    {% for wert, text in [('aktiv', 'Aktiv'), ('archiviert', 'Archiviert'), ('alle', 'Alle')] %}
+      <label class="segment {% if status == wert %}gewaehlt{% endif %}">
+        <input type="radio" name="status" value="{{ wert }}" {% if status == wert %}checked{% endif %} onchange="this.form.submit()">{{ text }}
+      </label>
+    {% endfor %}
+  </div>
+  <button class="knopf" type="submit">Suchen</button>
+</form>
+
+{% if kunden %}
+<div class="tabelle-rahmen">
+<table class="tabelle">
+  <thead>
+    <tr><th>Kundennr.</th><th>Firma</th><th>Sitz</th><th>Hauptkontakt</th><th class="rechts">Kontakte</th><th>Status</th></tr>
+  </thead>
+  <tbody>
+  {% for k in kunden %}
+    <tr class="klickbar" onclick="location.href='{{ url_for('kunden.detail', kunde_id=k.id) }}'">
+      <td class="mono">{{ k.kundennummer }}</td>
+      <td><a href="{{ url_for('kunden.detail', kunde_id=k.id) }}">{{ k.firma }}</a></td>
+      <td>{{ k.plz }} {{ k.ort }}{% if k.land != 'DE' %} ({{ k.land }}){% endif %}</td>
+      <td>{{ k.hauptkontakt or '–' }}</td>
+      <td class="rechts">{{ k.anzahl_ap }}</td>
+      <td>{% if k.archiviert_am %}<span class="marke-status archiv">archiviert</span>{% else %}<span class="marke-status aktiv">aktiv</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="hinweis">{{ kunden|length }} Kunde{% if kunden|length != 1 %}n{% endif %}</p>
+{% else %}
+<div class="leer">
+  {% if suche %}Keine Kunden zu „{{ suche }}“ gefunden.
+  {% elif status == 'archiviert' %}Es gibt keine archivierten Kunden.
+  {% else %}Noch keine Kunden angelegt. <a href="{{ url_for('kunden.neu') }}">Ersten Kunden anlegen</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}
