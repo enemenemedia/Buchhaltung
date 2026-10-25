@@ -40,6 +40,52 @@ CREATE TABLE IF NOT EXISTS kunden (
 
 CREATE INDEX IF NOT EXISTS idx_kunden_firma ON kunden (firma);
 
+-- Firmenstammdaten (genau eine Zeile, id = 1) ----------------------------
+-- Felder orientieren sich an den Verkäuferangaben der XRechnung (BG-4 Seller):
+--   firma            -> BT-27 Seller name
+--   handelsname      -> BT-28 Seller trading name
+--   strasse/...      -> BG-5 Seller postal address (BT-35 .. BT-40)
+--   ust_id           -> BT-31 Seller VAT identifier
+--   steuernummer     -> BT-32 Seller tax registration identifier
+--   registernummer   -> BT-30 Seller legal registration identifier
+--   elektronische_adresse -> BT-34 Seller electronic address (Pflicht in XRechnung)
+--   kontakt_*        -> BG-6 Seller contact (BT-41 .. BT-43, Pflicht in XRechnung)
+--   iban/bic         -> BT-84 / BT-86 Payment account
+-- Das Logo liegt als Datei unter <daten>/stammdaten/logo.png.
+CREATE TABLE IF NOT EXISTS stammdaten (
+    id                      INTEGER PRIMARY KEY CHECK (id = 1),
+    firma                   TEXT    NOT NULL DEFAULT '',
+    handelsname             TEXT    NOT NULL DEFAULT '',
+    inhaber                 TEXT    NOT NULL DEFAULT '',  -- Inhaber bzw. Geschäftsführung
+    strasse                 TEXT    NOT NULL DEFAULT '',
+    adresszusatz            TEXT    NOT NULL DEFAULT '',
+    plz                     TEXT    NOT NULL DEFAULT '',
+    ort                     TEXT    NOT NULL DEFAULT '',
+    land                    TEXT    NOT NULL DEFAULT 'DE',
+    telefon                 TEXT    NOT NULL DEFAULT '',
+    email                   TEXT    NOT NULL DEFAULT '',
+    website                 TEXT    NOT NULL DEFAULT '',
+    elektronische_adresse   TEXT    NOT NULL DEFAULT '',
+    kontakt_name            TEXT    NOT NULL DEFAULT '',
+    kontakt_telefon         TEXT    NOT NULL DEFAULT '',
+    kontakt_email           TEXT    NOT NULL DEFAULT '',
+    ust_id                  TEXT    NOT NULL DEFAULT '',
+    steuernummer            TEXT    NOT NULL DEFAULT '',
+    finanzamt               TEXT    NOT NULL DEFAULT '',
+    registergericht         TEXT    NOT NULL DEFAULT '',
+    registernummer          TEXT    NOT NULL DEFAULT '',
+    kleinunternehmer        INTEGER NOT NULL DEFAULT 0,   -- § 19 UStG
+    kontoinhaber            TEXT    NOT NULL DEFAULT '',
+    iban                    TEXT    NOT NULL DEFAULT '',
+    bic                     TEXT    NOT NULL DEFAULT '',
+    bank                    TEXT    NOT NULL DEFAULT '',
+    zahlungsziel_tage       INTEGER NOT NULL DEFAULT 14,
+    logo_aktualisiert_am    TEXT,
+    geaendert_am            TEXT
+);
+
+INSERT OR IGNORE INTO stammdaten (id) VALUES (1);
+
 -- Ansprechpartner (beliebig viele je Kunde) ------------------------------
 CREATE TABLE IF NOT EXISTS ansprechpartner (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,

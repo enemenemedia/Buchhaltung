@@ -11,7 +11,7 @@
     <div class="kopf-innen">
       <a class="marke" href="{{ url_for('start') }}">X-Rechnung <span>für KMU</span></a>
       <nav class="hauptnav">
-        <span class="nav-inaktiv" title="folgt">Stammdaten</span>
+        <a href="{{ url_for('stammdaten.seite') }}" class="{% if request.blueprint == 'stammdaten' %}aktiv{% endif %}">Stammdaten</a>
         <a href="{{ url_for('kunden.liste') }}" class="{% if request.blueprint == 'kunden' %}aktiv{% endif %}">Kunden</a>
         <span class="nav-inaktiv" title="folgt">Leistungen</span>
         <span class="nav-inaktiv" title="folgt">Angebote</span>

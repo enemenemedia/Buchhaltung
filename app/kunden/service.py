@@ -6,14 +6,15 @@ aus der Weboberfläche als auch aus Tests oder Skripten nutzbar sind.
 
 from __future__ import annotations
 
-import json
 import re
 import shutil
 import sqlite3
 import uuid
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
+
+from .. import protokoll as protokoll_modul
 
 AUFBEWAHRUNG_JAHRE = 10
 
@@ -168,28 +169,18 @@ def ansprechpartner(con: sqlite3.Connection, kunde_id: int) -> list[sqlite3.Row]
 
 
 def protokoll(con: sqlite3.Connection, kunde_id: int) -> list[dict]:
-    zeilen = con.execute(
-        "SELECT * FROM aenderungsprotokoll WHERE bereich = 'kunde' AND objekt_id = ? "
-        "ORDER BY zeitpunkt DESC, id DESC",
-        (kunde_id,),
-    ).fetchall()
-    return [dict(z, details=json.loads(z["details"] or "{}")) for z in zeilen]
+    return protokoll_modul.lesen(con, "kunde", kunde_id)
 
 
 # ---------------------------------------------------------------------------
 # Schreiben
 # ---------------------------------------------------------------------------
 
-def _jetzt() -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+_jetzt = protokoll_modul.jetzt
 
 
 def _protokollieren(con, kunde_id: int, aktion: str, details: dict | None = None) -> None:
-    con.execute(
-        "INSERT INTO aenderungsprotokoll (zeitpunkt, bereich, objekt_id, aktion, details) "
-        "VALUES (?, 'kunde', ?, ?, ?)",
-        (_jetzt(), kunde_id, aktion, json.dumps(details or {}, ensure_ascii=False)),
-    )
+    protokoll_modul.schreiben(con, "kunde", kunde_id, aktion, details)
 
 
 def kundenordner(datenverzeichnis: Path, kundennummer: str) -> Path:

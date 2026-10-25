@@ -1,0 +1,36 @@
+{# Darstellung des Änderungsprotokolls – gemeinsam für alle Module. #}
+{% set AKTIONEN = {'angelegt': 'Angelegt', 'geaendert': 'Geändert', 'archiviert': 'Archiviert',
+                   'reaktiviert': 'Reaktiviert', 'geloescht': 'Gelöscht', 'logo': 'Logo'} %}
+
+{% macro protokoll_liste(eintraege, leer_text='Noch keine Einträge.') -%}
+  {% if eintraege %}
+  <ol class="protokoll">
+  {% for e in eintraege %}
+    <li>
+      <time>{{ e.zeitpunkt|datum(true) }}</time>
+      <strong>{{ AKTIONEN.get(e.aktion, e.aktion) }}</strong>
+      {% if e.details.felder %}
+        <ul>{% for feld, werte in e.details.felder.items() %}
+          {% if e.aktion == 'angelegt' %}
+          <li>{{ feld }}: {{ werte[1] }}</li>
+          {% else %}
+          <li>{{ feld }}: <del>{{ werte[0] if werte[0] not in (none, '') else '–' }}</del> → <ins>{{ werte[1] if werte[1] not in (none, '') else '–' }}</ins></li>
+          {% endif %}
+        {% endfor %}</ul>
+      {% endif %}
+      {% if e.details.ansprechpartner %}
+        <ul>{% for t in e.details.ansprechpartner %}<li>{{ t }}</li>{% endfor %}</ul>
+      {% endif %}
+      {% if e.details.hinweise %}
+        <ul>{% for t in e.details.hinweise %}<li>{{ t }}</li>{% endfor %}</ul>
+      {% endif %}
+      {% if e.aktion == 'archiviert' and e.details.loeschbar_ab %}
+        <ul><li>löschbar ab {{ e.details.loeschbar_ab|datum }}</li></ul>
+      {% endif %}
+    </li>
+  {% endfor %}
+  </ol>
+  {% else %}
+  <p class="gedimmt">{{ leer_text }}</p>
+  {% endif %}
+{%- endmacro %}

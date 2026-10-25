@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_protokoll.html" import protokoll_liste %}
 {% block titel %}{{ kunde.firma }} – X-Rechnung für KMU{% endblock %}
 {% block inhalt %}
 <p class="brotkrumen"><a href="{{ url_for('kunden.liste', status='archiviert' if kunde.archiviert_am else 'aktiv') }}">← Kunden</a></p>
@@ -84,26 +85,7 @@
 
 <section class="karte">
   <h2>Änderungsprotokoll</h2>
-  <ol class="protokoll">
-  {% for e in protokoll %}
-    <li>
-      <time>{{ e.zeitpunkt|datum(true) }}</time>
-      <strong>{{ {'angelegt': 'Angelegt', 'geaendert': 'Geändert', 'archiviert': 'Archiviert',
-                  'reaktiviert': 'Reaktiviert', 'geloescht': 'Gelöscht'}.get(e.aktion, e.aktion) }}</strong>
-      {% if e.details.felder %}
-        <ul>{% for feld, werte in e.details.felder.items() %}
-          <li>{{ feld }}: <del>{{ werte[0] or '–' }}</del> → <ins>{{ werte[1] or '–' }}</ins></li>
-        {% endfor %}</ul>
-      {% endif %}
-      {% if e.details.ansprechpartner %}
-        <ul>{% for t in e.details.ansprechpartner %}<li>{{ t }}</li>{% endfor %}</ul>
-      {% endif %}
-      {% if e.aktion == 'archiviert' and e.details.loeschbar_ab %}
-        <ul><li>löschbar ab {{ e.details.loeschbar_ab|datum }}</li></ul>
-      {% endif %}
-    </li>
-  {% endfor %}
-  </ol>
+  {{ protokoll_liste(protokoll) }}
 </section>
 
 {% if kunde.archiviert_am %}

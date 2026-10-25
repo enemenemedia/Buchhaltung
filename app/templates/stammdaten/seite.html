@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% from "_protokoll.html" import protokoll_liste %}
+{% block titel %}Stammdaten – X-Rechnung für KMU{% endblock %}
+
+{% set XR_FELDER = fehlend | map(attribute='feld') | list %}
+
+{% macro feld(name, label, typ='text', breite='s6', pflicht=false, xr=false, hilfe='', attrs='', wert=none) -%}
+  {% set v = wert if wert is not none else daten.get(name, '') %}
+  <label class="feld {{ breite }} {% if fehler.get(name) %}hat-fehler{% endif %}">
+    <span>{{ label }}{% if pflicht %} <em>*</em>{% endif %}{% if xr %} <abbr class="xr {% if name in XR_FELDER %}offen{% endif %}" title="Für X-Rechnungen erforderlich">XR</abbr>{% endif %}</span>
+    <input type="{{ typ }}" name="{{ name }}" id="f-{{ name }}" value="{{ v if v is not none else '' }}" {% if pflicht %}required{% endif %} {{ attrs|safe }}>
+    {% if fehler.get(name) %}<small class="fehlertext">{{ fehler[name] }}</small>{% elif hilfe %}<small>{{ hilfe }}</small>{% endif %}
+  </label>
+{%- endmacro %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+  <div>
+    <h1>Stammdaten</h1>
+    <p class="untertitel">Ihre Firmendaten als Absender auf Angeboten und Rechnungen.
+      {% if gespeichert.geaendert_am %}Zuletzt geändert am {{ gespeichert.geaendert_am|datum(true) }}.{% endif %}</p>
+  </div>
+</div>
+
+{% if not gespeichert.geaendert_am %}
+<div class="hinweisbox">Willkommen! Bitte erfassen Sie zuerst Ihre eigenen Firmendaten – sie erscheinen als Absender auf allen Angeboten und Rechnungen.</div>
+{% endif %}
+
+<div class="spalten">
+  <section class="karte" id="logo">
+    <h2>Logo</h2>
+    <div class="logo-feld">
+      <div class="logo-vorschau {% if not logo %}leer{% endif %}" id="logo-vorschau">
+        {% if logo %}
+          <img src="{{ url_for('stammdaten.logo_datei', v=logo_version) }}" alt="Firmenlogo">
+        {% else %}
+          <span>Kein Logo hinterlegt</span>
+        {% endif %}
+      </div>
+      <form method="post" action="{{ url_for('stammdaten.logo_hochladen') }}" enctype="multipart/form-data" class="logo-form">
+        <label class="knopf datei-knopf">
+          <input type="file" name="logo" id="logo-datei" accept="image/png,image/jpeg,image/webp">
+          {{ 'Anderes Logo wählen' if logo else 'Logo wählen' }}
+        </label>
+        <button class="knopf knopf-primaer" type="submit" id="logo-hochladen" hidden>Hochladen</button>
+        <span class="gedimmt dateiname" id="logo-name"></span>
+      </form>
+      {% if logo %}
+      <form method="post" action="{{ url_for('stammdaten.logo_entfernen') }}"
+            onsubmit="return confirm('Logo entfernen? Die bisherige Datei wird archiviert.')">
+        <button class="knopf-text" type="submit">Logo entfernen</button>
+      </form>
+      {% endif %}
+      <small class="gedimmt">PNG (am besten mit transparentem Hintergrund), JPG oder WebP, höchstens 5 MB.
+        Das Bild wird auf maximal 1200 px verkleinert und als PNG gespeichert.</small>
+    </div>
+
+    <h3 class="zwischentitel">So erscheint der Briefkopf</h3>
+    <div class="briefkopf">
+      <div class="briefkopf-absender">
+        <strong>{{ gespeichert.firma or 'Ihre Firma' }}</strong>
+        <span>{{ gespeichert.strasse or 'Straße 1' }} · {{ gespeichert.plz or '12345' }} {{ gespeichert.ort or 'Ort' }}</span>
+      </div>
+      {% if logo %}<img src="{{ url_for('stammdaten.logo_datei', v=logo_version) }}" alt="">{% endif %}
+    </div>
+  </section>
+
+  <section class="karte">
+    <h2>Bereit für X-Rechnung?</h2>
+    {% if not fehlend %}
+      <p class="status-ok">✓ Alle Pflichtangaben für X-Rechnungen sind vorhanden.</p>
+    {% else %}
+      <p>Für gültige X-Rechnungen fehlen noch {{ fehlend|length }} Angabe{% if fehlend|length != 1 %}n{% endif %}:</p>
+      <ul class="fehlliste">
+        {% for f in fehlend %}<li><a href="#f-{{ f.feld }}">{{ f.text }}</a></li>{% endfor %}
+      </ul>
+    {% endif %}
+    <p class="gedimmt klein">Mit <abbr class="xr" title="Für X-Rechnungen erforderlich">XR</abbr> markierte Felder
+      verlangt der Standard XRechnung bzw. § 14 UStG. Speichern ist auch mit unvollständigen Angaben möglich.</p>
+  </section>
+</div>
+
+<form method="post" action="{{ url_for('stammdaten.speichern') }}" class="formular abstand-oben" novalidate>
+  <section class="karte">
+    <h2>Unternehmen</h2>
+    <div class="raster">
+      {{ feld('firma', 'Firmenname', breite='s8', pflicht=true, xr=true, hilfe='Vollständiger Name inkl. Rechtsform, z. B. „Muster Media GmbH“.') }}
+      {{ feld('handelsname', 'Handelsname', breite='s4', hilfe='Falls abweichend vom Firmennamen') }}
+      {{ feld('inhaber', 'Inhaber / Geschäftsführung', breite='s12', hilfe='Wird im Fußbereich von Angeboten und Rechnungen angegeben.') }}
+    </div>
+  </section>
+
+  <section class="karte">
+    <h2>Anschrift</h2>
+    <div class="raster">
+      {{ feld('strasse', 'Straße und Hausnummer', breite='s8', xr=true) }}
+      {{ feld('adresszusatz', 'Adresszusatz', breite='s4') }}
+      {{ feld('plz', 'PLZ', breite='s3', xr=true) }}
+      {{ feld('ort', 'Ort', breite='s6', xr=true) }}
+      {{ feld('land', 'Land', breite='s3', hilfe='ISO-Code, z. B. DE', attrs='maxlength="2" style="text-transform:uppercase"') }}
+    </div>
+  </section>
+
+  <section class="karte">
+    <h2>Kommunikation</h2>
+    <div class="raster">
+      {{ feld('telefon', 'Telefon', 'tel', breite='s4') }}
+      {{ feld('email', 'E-Mail', 'email', breite='s4') }}
+      {{ feld('website', 'Website', breite='s4', attrs='placeholder="www.beispiel.de"') }}
+      {{ feld('elektronische_adresse', 'Elektronische Adresse für Rechnungen', 'email', breite='s12', xr=true,
+              hilfe='E-Mail-Adresse, unter der Sie elektronisch erreichbar sind (BT-34). Meist die Buchhaltungs-Adresse.') }}
+    </div>
+    <h3 class="zwischentitel">Ansprechpartner für Rechnungsfragen</h3>
+    <div class="raster">
+      {{ feld('kontakt_name', 'Name', breite='s4', xr=true) }}
+      {{ feld('kontakt_telefon', 'Telefon', 'tel', breite='s4', xr=true) }}
+      {{ feld('kontakt_email', 'E-Mail', 'email', breite='s4', xr=true) }}
+    </div>
+  </section>
+
+  <section class="karte">
+    <h2>Steuern &amp; Register</h2>
+    <div class="raster">
+      {{ feld('ust_id', 'USt-IdNr.', breite='s4', xr=true, hilfe='Oder Steuernummer – mindestens eine Angabe', attrs='placeholder="DE123456789"') }}
+      {{ feld('steuernummer', 'Steuernummer', breite='s4', attrs='placeholder="12/345/67890"') }}
+      {{ feld('finanzamt', 'Finanzamt', breite='s4') }}
+      {{ feld('registergericht', 'Registergericht', breite='s6', attrs='placeholder="Amtsgericht Köln"') }}
+      {{ feld('registernummer', 'Registernummer', breite='s6', attrs='placeholder="HRB 12345"') }}
+      <label class="feld s12 schalter">
+        <input type="checkbox" name="kleinunternehmer" value="1" {% if daten.get('kleinunternehmer') %}checked{% endif %}>
+        <span>Kleinunternehmer nach § 19 UStG
+          <small>Rechnungen werden ohne Umsatzsteuer und mit dem gesetzlichen Hinweis erstellt.</small></span>
+      </label>
+    </div>
+  </section>
+
+  <section class="karte">
+    <h2>Bankverbindung &amp; Zahlung</h2>
+    <div class="raster">
+      {{ feld('kontoinhaber', 'Kontoinhaber', breite='s6', hilfe='Leer lassen, wenn identisch mit dem Firmennamen') }}
+      {{ feld('bank', 'Bank', breite='s6') }}
+      {{ feld('iban', 'IBAN', breite='s8', xr=true, wert=iban_formatiert(daten.get('iban', '')) if not fehler.get('iban') else daten.get('iban'),
+              attrs='placeholder="DE00 0000 0000 0000 0000 00" autocomplete="off" spellcheck="false"') }}
+      {{ feld('bic', 'BIC', breite='s4', attrs='autocomplete="off" spellcheck="false"') }}
+      {{ feld('zahlungsziel_tage', 'Zahlungsziel in Tagen', 'number', breite='s4', hilfe='Vorgabe für neue Rechnungen',
+              attrs='min="0" max="365" inputmode="numeric"') }}
+    </div>
+  </section>
+
+  <div class="aktionen">
+    <a class="knopf" href="{{ url_for('stammdaten.seite') }}">Verwerfen</a>
+    <button class="knopf knopf-primaer" type="submit">Stammdaten speichern</button>
+  </div>
+</form>
+
+<section class="karte">
+  <h2>Änderungsprotokoll</h2>
+  {{ protokoll_liste(verlauf, 'Die Stammdaten wurden noch nicht gespeichert.') }}
+</section>
+{% endblock %}
+
+{% block skripte %}
+<script>
+// Vorschau des gewählten Logos vor dem Hochladen
+(function () {
+  const eingabe = document.getElementById("logo-datei");
+  const vorschau = document.getElementById("logo-vorschau");
+  const knopf = document.getElementById("logo-hochladen");
+  const name = document.getElementById("logo-name");
+  eingabe.addEventListener("change", () => {
+    const datei = eingabe.files[0];
+    if (!datei) { knopf.hidden = true; name.textContent = ""; return; }
+    if (datei.size > 5 * 1024 * 1024) {
+      alert("Die Datei ist größer als 5 MB.");
+      eingabe.value = ""; return;
+    }
+    const url = URL.createObjectURL(datei);
+    vorschau.classList.remove("leer");
+    vorschau.innerHTML = "";
+    const img = document.createElement("img");
+    img.src = url; img.alt = "Vorschau";
+    vorschau.appendChild(img);
+    name.textContent = datei.name;
+    knopf.hidden = false;
+    knopf.focus();
+  });
+})();
+</script>
+{% endblock %}
