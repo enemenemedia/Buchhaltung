@@ -22,6 +22,12 @@ NACHTRAEGLICHE_SPALTEN = {
         "preisausweis": "TEXT NOT NULL DEFAULT 'netto' CHECK (preisausweis IN ('netto', 'brutto'))",
         "angebot_gueltigkeit_tage": "INTEGER NOT NULL DEFAULT 30",
     },
+    "rechnungen": {
+        "art": "TEXT NOT NULL DEFAULT 'rechnung' CHECK (art IN ('rechnung', 'korrektur', 'storno'))",
+        "bezug_id": "INTEGER REFERENCES rechnungen (id)",
+        "korrektur_grund": "TEXT NOT NULL DEFAULT ''",
+        "vorausbezahlt": "TEXT NOT NULL DEFAULT '0'",
+    },
 }
 
 

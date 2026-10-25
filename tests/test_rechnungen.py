@@ -316,7 +316,7 @@ def test_web_ablauf(client, verz, con, kunde, beratung):
     r = client.post("/rechnungen/neu", data=formular(kunde, pos(beratung)))
     assert r.status_code == 302
     detail = client.get(r.headers["Location"]).get_data(as_text=True)
-    assert "Bereit für die XRechnung" in detail and "Rechnungsentwurf #1" in detail
+    assert "Bereit für die XRechnung" in detail and "Entwurf Rechnung #1" in detail
     assert client.get("/rechnungen/1/pdf").data.startswith(b"%PDF")
     assert client.get("/rechnungen/1/xml").status_code == 404
     assert 'value="110,00"' in client.get("/rechnungen/1/bearbeiten").get_data(as_text=True)

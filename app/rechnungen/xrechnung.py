@@ -3,6 +3,11 @@
 Die Elementreihenfolge folgt dem UBL-2.1-Schema. Kommentare nennen die
 Business Terms (BT) bzw. Business Groups (BG) aus EN 16931 / XRechnung.
 
+Belegarten (BT-3, UNTDID 1001):
+  380 – Rechnung                         (UBL Invoice)
+  384 – Rechnungskorrektur               (UBL Invoice, mit Bezug BG-3 auf die Originalrechnung)
+  381 – Gutschrift = Stornorechnung      (UBL CreditNote, Beträge positiv, Bezug BG-3)
+
 Steuerkategorien (UNTDID 5305):
   S  – Normalsatz/ermäßigter Satz (19 %, 7 %)
   E  – steuerbefreit; auch Kleinunternehmer nach § 19 UStG (mit Befreiungsgrund BT-120)
@@ -17,6 +22,7 @@ from xml.etree import ElementTree as ET
 from .. import berechnung, zahlen
 
 NS_INV = "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+NS_CN = "urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2"
 NS_CAC = "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
 NS_CBC = "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
 
@@ -28,6 +34,7 @@ GRUND_REVERSE_CHARGE = "Steuerschuldnerschaft des Leistungsempfängers"
 GRUND_STEUERFREI = "Steuerfreie Leistung"
 
 ET.register_namespace("", NS_INV)
+ET.register_namespace("cn", NS_CN)
 ET.register_namespace("cac", NS_CAC)
 ET.register_namespace("cbc", NS_CBC)
 
@@ -95,22 +102,37 @@ def _steuer_id(party, nummer: str, schema: str) -> None:
     _cbc(ts, "ID", schema)
 
 
-def erzeugen(r: dict, positionen: list, verkaeufer: dict, kaeufer: dict) -> bytes:
+TYPCODE = {"rechnung": "380", "korrektur": "384", "storno": "381"}
+
+
+def erzeugen(r: dict, positionen: list, verkaeufer: dict, kaeufer: dict, *,
+             art: str = "rechnung", bezug: dict | None = None) -> bytes:
     """r: Rechnungskopf (nummer, rechnungsdatum, faellig_am, leistung_von/-bis, …).
 
     verkaeufer/kaeufer: eingefrorene Stamm- bzw. Kundendaten (siehe service.abschliessen).
+    art: 'rechnung' | 'korrektur' | 'storno'.
+    bezug: Originalrechnung bei Korrektur/Storno – {"nummer", "datum", "bezahlt"}.
+    Positionen und Beträge werden immer positiv übergeben; bei der Gutschrift (Storno)
+    ergibt sich die Gegenbuchung aus der Belegart 381.
     """
+    if art not in TYPCODE:
+        raise ValueError(f"Unbekannte Belegart {art}")
+    if art != "rechnung" and not bezug:
+        raise ValueError("Storno und Korrektur brauchen den Bezug auf die Originalrechnung.")
+    gutschrift = art == "storno"
     klein = bool(r["kleinunternehmer"])
     summen = berechnung.berechnen(positionen, klein, "netto")
+    vorausbezahlt = zahlen.parsen(r.get("vorausbezahlt") or "0") if art == "korrektur" else Decimal(0)
 
-    inv = ET.Element(f"{{{NS_INV}}}Invoice")
+    inv = ET.Element(f"{{{NS_CN}}}CreditNote" if gutschrift else f"{{{NS_INV}}}Invoice")
     _cbc(inv, "CustomizationID", CUSTOMIZATION_ID)                        # BT-24
     _cbc(inv, "ProfileID", PROFILE_ID)                                    # BT-23
     _cbc(inv, "ID", r["nummer"])                                          # BT-1
     _cbc(inv, "IssueDate", r["rechnungsdatum"])                           # BT-2
-    _cbc(inv, "DueDate", r["faellig_am"])                                 # BT-9
-    _cbc(inv, "InvoiceTypeCode", "380")                                   # BT-3 Rechnung
-    for notiz in _notizen(r, klein):                                      # BT-22
+    if not gutschrift:
+        _cbc(inv, "DueDate", r["faellig_am"])                             # BT-9
+    _cbc(inv, "CreditNoteTypeCode" if gutschrift else "InvoiceTypeCode", TYPCODE[art])   # BT-3
+    for notiz in _notizen(r, klein, art, bezug):                          # BT-22
         _cbc(inv, "Note", notiz)
     _cbc(inv, "DocumentCurrencyCode", "EUR")                              # BT-5
     _cbc(inv, "BuyerReference", r["kaeufer_referenz"])                    # BT-10 (Leitweg-ID)
@@ -121,6 +143,10 @@ def erzeugen(r: dict, positionen: list, verkaeufer: dict, kaeufer: dict) -> byte
     if r.get("bestellnummer"):
         bestellung = _cac(inv, "OrderReference")
         _cbc(bestellung, "ID", r["bestellnummer"])                        # BT-13
+    if bezug:                                                             # BG-3 Vorausgegangene Rechnung
+        ref = _cac(_cac(inv, "BillingReference"), "InvoiceDocumentReference")
+        _cbc(ref, "ID", bezug["nummer"])                                  # BT-25
+        _cbc(ref, "IssueDate", bezug["datum"])                            # BT-26
 
     # BG-4 Verkäufer ----------------------------------------------------------
     sup = _cac(_cac(inv, "AccountingSupplierParty"), "Party")
@@ -158,14 +184,19 @@ def erzeugen(r: dict, positionen: list, verkaeufer: dict, kaeufer: dict) -> byte
 
     # BG-16 Zahlung: SEPA-Überweisung ----------------------------------------------
     zm = _cac(inv, "PaymentMeans")
-    _cbc(zm, "PaymentMeansCode", "58")                                            # BT-81
-    _cbc(zm, "PaymentID", r["nummer"])                                            # BT-83 Verwendungszweck
-    konto = _cac(zm, "PayeeFinancialAccount")                                     # BG-17
-    _cbc(konto, "ID", verkaeufer["iban"])                                         # BT-84
-    _cbc(konto, "Name", verkaeufer.get("kontoinhaber") or verkaeufer["firma"])    # BT-85
-    if verkaeufer.get("bic"):
-        _cbc(_cac(konto, "FinancialInstitutionBranch"), "ID", verkaeufer["bic"])  # BT-86
-    _cbc(_cac(inv, "PaymentTerms"), "Note", zahlungsbedingung(r))                 # BT-20
+    if gutschrift:
+        # Storno: Verrechnung mit der Originalrechnung bzw. Erstattung, falls bereits bezahlt
+        _cbc(zm, "PaymentMeansCode", "ZZZ" if bezug.get("bezahlt") else "97")    # BT-81
+        _cbc(zm, "PaymentID", r["nummer"])                                        # BT-83
+    else:
+        _cbc(zm, "PaymentMeansCode", "58")                                        # BT-81 SEPA-Überweisung
+        _cbc(zm, "PaymentID", r["nummer"])                                        # BT-83 Verwendungszweck
+        konto = _cac(zm, "PayeeFinancialAccount")                                 # BG-17
+        _cbc(konto, "ID", verkaeufer["iban"])                                     # BT-84
+        _cbc(konto, "Name", verkaeufer.get("kontoinhaber") or verkaeufer["firma"])  # BT-85
+        if verkaeufer.get("bic"):
+            _cbc(_cac(konto, "FinancialInstitutionBranch"), "ID", verkaeufer["bic"])  # BT-86
+    _cbc(_cac(inv, "PaymentTerms"), "Note", zahlungsbedingung(r, art, bezug))     # BT-20
 
     # BG-23 Umsatzsteuer ----------------------------------------------------------
     gruppen: dict[str, dict] = {}
@@ -195,13 +226,16 @@ def erzeugen(r: dict, positionen: list, verkaeufer: dict, kaeufer: dict) -> byte
     _eur(lmt, "LineExtensionAmount", summen.netto)                                # BT-106
     _eur(lmt, "TaxExclusiveAmount", summen.netto)                                 # BT-109
     _eur(lmt, "TaxInclusiveAmount", summen.gesamt)                                # BT-112
-    _eur(lmt, "PayableAmount", summen.gesamt)                                     # BT-115
+    if vorausbezahlt:
+        _eur(lmt, "PrepaidAmount", vorausbezahlt)                                 # BT-113
+    _eur(lmt, "PayableAmount", summen.gesamt - vorausbezahlt)                     # BT-115
 
     # BG-25 Positionen ------------------------------------------------------------
     for nr, (p, z) in enumerate(zip(positionen, summen.zeilen), start=1):
-        zeile = _cac(inv, "InvoiceLine")
+        zeile = _cac(inv, "CreditNoteLine" if gutschrift else "InvoiceLine")
         _cbc(zeile, "ID", nr)                                                     # BT-126
-        _cbc(zeile, "InvoicedQuantity", _zahl(p["menge"]), unitCode=p["einheit_code"])  # BT-129/130
+        _cbc(zeile, "CreditedQuantity" if gutschrift else "InvoicedQuantity",     # BT-129/130
+             _zahl(p["menge"]), unitCode=p["einheit_code"])
         _eur(zeile, "LineExtensionAmount", z.betrag_netto)                        # BT-131
         item = _cac(zeile, "Item")
         _cbc(item, "Description", p["beschreibung"])                              # BT-154
@@ -218,16 +252,34 @@ def erzeugen(r: dict, positionen: list, verkaeufer: dict, kaeufer: dict) -> byte
     return b'<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(inv, encoding="utf-8")
 
 
-def zahlungsbedingung(r: dict) -> str:
+def _de(iso: str) -> str:
+    return f"{iso[8:10]}.{iso[5:7]}.{iso[:4]}"
+
+
+def zahlungsbedingung(r: dict, art: str = "rechnung", bezug: dict | None = None) -> str:
+    if art == "storno":
+        if bezug and bezug.get("bezahlt"):
+            return f"Der bereits gezahlte Betrag der Rechnung {bezug['nummer']} wird Ihnen erstattet."
+        return f"Der Betrag wird mit der Rechnung {bezug['nummer']} verrechnet; es ist keine Zahlung erforderlich."
+    vorausbezahlt = zahlen.parsen(r.get("vorausbezahlt") or "0") if art == "korrektur" else Decimal(0)
+    if vorausbezahlt:
+        return (f"Auf die Rechnung {bezug['nummer']} wurden bereits {zahlen.geld(vorausbezahlt)} gezahlt; "
+                "es ist nur der Differenzbetrag fällig bzw. wird erstattet.")
     tage = int(r["zahlungsziel_tage"])
-    faellig = f"{r['faellig_am'][8:10]}.{r['faellig_am'][5:7]}.{r['faellig_am'][:4]}"
+    faellig = _de(r["faellig_am"])
     if tage == 0:
         return f"Zahlbar sofort ohne Abzug (bis {faellig})."
     return f"Zahlbar innerhalb von {tage} Tagen ohne Abzug bis zum {faellig}."
 
 
-def _notizen(r: dict, klein: bool) -> list[str]:
+def _notizen(r: dict, klein: bool, art: str = "rechnung", bezug: dict | None = None) -> list[str]:
     notizen = []
+    if art == "storno":
+        notizen.append(f"Stornorechnung zur Rechnung {bezug['nummer']} vom {_de(bezug['datum'])}.")
+    elif art == "korrektur":
+        notizen.append(f"Rechnungskorrektur: ersetzt die Rechnung {bezug['nummer']} vom {_de(bezug['datum'])}.")
+    if art != "rechnung" and r.get("korrektur_grund"):
+        notizen.append(f"Grund: {r['korrektur_grund']}")
     if r.get("betreff"):
         notizen.append(r["betreff"])
     if r.get("anmerkungen"):

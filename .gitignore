@@ -4,4 +4,4 @@ __pycache__/
 venv/
 .pytest_cache/
 # Laufzeitdaten (Datenbank, Kundenordner) nicht ins Repository
-daten/
+/daten/

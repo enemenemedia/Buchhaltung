@@ -243,7 +243,8 @@ class Belegdokument:
         ]))
         return t
 
-    def _summentabelle(self) -> Table:
+    def summen_zeilen(self) -> list[tuple[str, str, bool]]:
+        """(Bezeichnung, Betrag, hervorgehoben) – in Unterklassen erweiterbar."""
         s = self.summen
         zeilen: list[tuple[str, str, bool]] = []
         if self.klein:
@@ -259,7 +260,10 @@ class Belegdokument:
             for g in s.steuergruppen:
                 if g.satz:
                     zeilen.append((f"enthaltene USt {zahlen.menge(g.satz)} %", _geld(g.betrag), False))
+        return zeilen
 
+    def _summentabelle(self) -> Table:
+        zeilen = self.summen_zeilen()
         daten = [[Paragraph(f"<b>{escape(l)}</b>" if fett else escape(l), S_RECHTS if not fett else
                             ParagraphStyle("sfett", parent=S_RECHTS, fontSize=11, leading=14)),
                   Paragraph(f"<b>{w}</b>" if fett else w,

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_positionen.html" import fehlertext, positionen_bereich with context %}
-{% block titel %}{{ 'Rechnung bearbeiten' if rechnung else 'Neue Rechnung' }} – X-Rechnung für KMU{% endblock %}
+{% set korrektur = rechnung and rechnung.art == 'korrektur' %}
+{% block titel %}{{ 'Rechnungskorrektur bearbeiten' if korrektur else ('Rechnung bearbeiten' if rechnung else 'Neue Rechnung') }} – X-Rechnung für KMU{% endblock %}
 
 {% macro feld(name, label, typ='text', breite='s6', pflicht=false, hilfe='', attrs='') -%}
   <label class="feld {{ breite }} {% if fehler.get(name) %}hat-fehler{% endif %}">
@@ -13,13 +14,41 @@
 {% block inhalt %}
 <p class="brotkrumen"><a href="{{ url_for('rechnungen.detail', rechnung_id=rechnung.id) if rechnung else url_for('rechnungen.liste') }}">← {{ 'Entwurf #' ~ rechnung.id if rechnung else 'Rechnungen' }}</a></p>
 <div class="seitenkopf">
-  <h1>{% if rechnung %}Rechnungsentwurf #{{ rechnung.id }} bearbeiten{% else %}Neue Rechnung{% endif %}</h1>
+  <h1>{% if korrektur %}Rechnungskorrektur #{{ rechnung.id }} bearbeiten{% elif rechnung %}Rechnungsentwurf #{{ rechnung.id }} bearbeiten{% else %}Neue Rechnung{% endif %}</h1>
 </div>
 
 {% set modus = daten.get('kunde_modus') or 'bestand' %}
 <form method="post" class="formular" novalidate data-beleg-editor data-ausweis="netto"
       data-klein="{{ '1' if kleinunternehmer else '0' }}" id="rechnung-form">
 
+  {% if korrektur %}
+  <section class="karte korrektur-karte">
+    <h2>Korrektur der Rechnung {{ rechnung.bezug_nummer }} vom {{ rechnung.bezug_datum|datum }}</h2>
+    <p class="gedimmt">Die Korrektur ersetzt die Originalrechnung vollständig. Ändern Sie unten Positionen, Mengen, Preise
+      oder Daten; der Kunde bleibt derselbe. Wurde die Originalrechnung bereits bezahlt, wird der Betrag beim
+      Abschließen verrechnet.</p>
+    <label class="feld s12 {% if fehler.get('korrektur_grund') %}hat-fehler{% endif %}"><span>Grund der Korrektur <em>*</em></span>
+      <input name="korrektur_grund" id="f-korrektur_grund" value="{{ daten.get('korrektur_grund', '') }}" maxlength="500"
+             placeholder="z. B. Falsche Stundenzahl abgerechnet" required>
+      {% if fehler.get('korrektur_grund') %}{{ fehlertext('korrektur_grund') }}{% else %}<small>Erscheint auf der Korrektur und in der XRechnung.</small>{% endif %}</label>
+  </section>
+
+  <section class="karte">
+    <h2>Kunde</h2>
+    <input type="hidden" name="kunde_modus" value="bestand">
+    <input type="hidden" name="kunde_id" value="{{ rechnung.kunde_id }}">
+    <div class="raster">
+      <label class="feld s6"><span>Kunde</span>
+        <select id="kunde" disabled>
+          {% for k in kunden if k.id == rechnung.kunde_id %}<option value="{{ k.id }}" selected>{{ k.firma }} · {{ k.nummer }}</option>{% endfor %}
+        </select><small>Bei einer Korrektur bleibt der Kunde der Originalrechnung.</small></label>
+      <label class="feld s6"><span>Ansprechpartner</span>
+        <select name="ansprechpartner_id" id="ansprechpartner" data-wert="{{ daten.get('ansprechpartner_id', '') }}">
+          <option value="">– ohne –</option>
+        </select></label>
+    </div>
+  </section>
+  {% else %}
   <section class="karte">
     <div class="karte-kopf">
       <h2>Kunde</h2>
@@ -74,6 +103,7 @@
       </div>
     </div>
   </section>
+  {% endif %}
 
   <section class="karte">
     <h2>Rechnungsdaten</h2>
@@ -139,6 +169,7 @@
 (function () {
   const form = document.getElementById("rechnung-form");
   const bereiche = { bestand: form.querySelector(".kunde-bestand"), neu: form.querySelector(".kunde-neu") };
+  if (!bereiche.bestand) delete bereiche.bestand, delete bereiche.neu;
   form.querySelectorAll('input[name="kunde_modus"]').forEach(r => r.addEventListener("change", () => {
     Object.entries(bereiche).forEach(([k, el]) => (el.hidden = k !== r.value));
     form.querySelectorAll('input[name="kunde_modus"]').forEach(x => x.closest(".segment").classList.toggle("gewaehlt", x.checked));
@@ -157,7 +188,7 @@
   [datum, ziel].forEach(el => el.addEventListener("input", faellig));
   faellig();
 
-  const referenz = document.getElementById("f-kaeufer_referenz");
+  const referenz = document.getElementById("f-kaeufer_referenz") || document.createElement("input");
   form.addEventListener("kundewechsel", e => {
     if (e.detail && (!referenz.value || referenz.dataset.auto === "1")) {
       referenz.value = e.detail.leitweg_id || "";

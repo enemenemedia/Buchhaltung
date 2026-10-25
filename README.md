@@ -13,6 +13,7 @@ die Bedienung erfolgt im Browser.
 | Leistungsverzeichnis (mit Import/Export und Änderungsprotokoll) | ✅ fertig |
 | Angebote (mit PDF) | ✅ fertig |
 | Rechnungen mit XRechnung (XML) + PDF | ✅ fertig |
+| Stornorechnungen und Rechnungskorrekturen | ✅ fertig |
 
 ## Starten
 
@@ -37,6 +38,8 @@ daten/
     └── K00001/              ein Ordner je Kundennummer
         ├── angebote/        z. B. AN-2026-0001.pdf
         ├── rechnungen/      z. B. 2026-10-25_RE-2026-0001_K00001.xml + .pdf
+        │                         2026-10-26_ST-2026-0001_K00001_storno_zu_RE-2026-0001.xml + .pdf
+        │                         2026-10-26_KR-2026-0001_K00001_korrektur_zu_RE-2026-0002.xml + .pdf
         └── dokumente/
 ```
 
@@ -141,6 +144,31 @@ daten/
 - **Zahlungseingang** erfassen; überfällige Rechnungen werden gekennzeichnet, die Liste zeigt offene
   und überfällige Beträge.
 - Rechnungen werden immer mit **Nettopreisen zzgl. USt** ausgewiesen (wie in der XRechnung).
+
+### Stornorechnungen und Rechnungskorrekturen
+
+Abgeschlossene Rechnungen bleiben unverändert. Fehler werden über einen eigenen, eindeutig
+zugeordneten Beleg berichtigt (§ 31 Abs. 5 UStDV):
+
+| | Stornorechnung | Rechnungskorrektur |
+|---|---|---|
+| Zweck | hebt die Rechnung vollständig auf | ersetzt die Rechnung mit geänderten Angaben |
+| Anlegen | „Stornieren“ in der Rechnung, Grund angeben | „Korrigieren“ in der Rechnung, Positionen/Daten im Editor ändern, Grund angeben |
+| Nummernkreis | `ST-<Jahr>-0001` | `KR-<Jahr>-0001` |
+| XRechnung | Gutschrift, Typ 381 (UBL CreditNote) | Typ 384 (Corrected invoice) |
+| Dateiname | `<Datum>_<Nr>_<Kundennr>_storno_zu_<Original-Nr>` | `<Datum>_<Nr>_<Kundennr>_korrektur_zu_<Original-Nr>` |
+
+- **Eindeutige Zuordnung**: Jeder Folgebeleg verweist auf genau eine Originalrechnung desselben
+  Kunden (BT-25/BT-26 in der XRechnung, Dateiname, Datenbank). Je Rechnung ist nur ein Folgebeleg
+  möglich; die Datenbank verhindert Zuordnungen zu fremden Kunden, zu Entwürfen oder zu Stornos.
+  Korrekturen lassen sich erneut korrigieren oder stornieren – die Seite „Zugehörige Belege“ zeigt die
+  ganze Kette.
+- **Status**: Das Original wird als *storniert* bzw. *korrigiert* gekennzeichnet und zählt nicht mehr zu
+  den offenen Beträgen.
+- **Bereits bezahlte Rechnungen**: Beim Storno wird der Betrag als offene Erstattung geführt. Bei der
+  Korrektur wird die Zahlung angerechnet (BT-113) – es bleibt ein Restbetrag zu zahlen oder eine
+  Erstattung an den Kunden.
+- Storno und Korrektur übernehmen die steuerliche Behandlung des Originals (z. B. § 19 UStG).
 
 ### Offizielle Prüfung der XRechnung (optional, empfohlen)
 

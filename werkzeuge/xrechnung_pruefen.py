@@ -1,7 +1,7 @@
 """Prüft XRechnung-Dateien (UBL) gegen XSD, EN 16931 und XRechnung-Regeln.
 
 Prüfstufen – wie beim offiziellen KoSIT-Validator:
-  1. XML-Schema OASIS UBL 2.1 (UBL-Invoice-2.1.xsd)
+  1. XML-Schema OASIS UBL 2.1 (UBL-Invoice-2.1.xsd bzw. UBL-CreditNote-2.1.xsd)
   2. Geschäftsregeln EN 16931 (CEN-Schematron, vorkompiliertes XSLT)
   3. Nationale Regeln XRechnung 3.0 (KoSIT-Schematron, BR-DE-*)
 
@@ -57,7 +57,10 @@ class Pruefer:
 
         self._proc = PySaxonProcessor(license=False)
         self._xslt = self._proc.new_xslt30_processor()
-        self._xsd = etree.XMLSchema(etree.parse(str(self.a / "ubl" / "maindoc" / "UBL-Invoice-2.1.xsd")))
+        self._xsd = {
+            "Invoice": etree.XMLSchema(etree.parse(str(self.a / "ubl" / "maindoc" / "UBL-Invoice-2.1.xsd"))),
+            "CreditNote": etree.XMLSchema(etree.parse(str(self.a / "ubl" / "maindoc" / "UBL-CreditNote-2.1.xsd"))),
+        }
         self._en16931 = self._xslt.compile_stylesheet(stylesheet_file=str(self.a / "EN16931-UBL-validation.xslt"))
         self._xrechnung = self._xslt.compile_stylesheet(stylesheet_text=self._schematron_kompilieren(
             self.a / "xrechnung" / "ubl" / "XRechnung-UBL-validation.sch"))
@@ -96,8 +99,13 @@ class Pruefer:
         except etree.XMLSyntaxError as e:
             erg.meldungen.append(Meldung("XML", "SYNTAX", "fatal", str(e)))
             return erg
-        if not self._xsd.validate(dok):
-            for f in self._xsd.error_log:
+        wurzel = etree.QName(dok).localname
+        schema = self._xsd.get(wurzel)
+        if schema is None:
+            erg.meldungen.append(Meldung("XSD", "UBL-2.1", "fatal", f"Unbekanntes Wurzelelement {wurzel}"))
+            return erg
+        if not schema.validate(dok):
+            for f in schema.error_log:
                 erg.meldungen.append(Meldung("XSD", "UBL-2.1", "fatal", f.message, f"Zeile {f.line}"))
         text = daten.decode("utf-8")
         for stufe, ausf in (("EN16931", self._en16931), ("XRechnung", self._xrechnung)):

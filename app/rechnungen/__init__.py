@@ -17,7 +17,8 @@ bp = Blueprint("rechnungen", __name__, url_prefix="/rechnungen")
 
 @bp.app_context_processor
 def _hilfen():
-    return {"RECHNUNG_STATUS": service.STATUS, "rechnung_status": service.anzeige_status}
+    return {"RECHNUNG_STATUS": service.STATUS, "rechnung_status": service.anzeige_status,
+            "RECHNUNG_ARTEN": service.ARTEN, "offener_betrag": service.offener_betrag}
 
 
 def _verzeichnis():
@@ -89,7 +90,7 @@ def detail(rechnung_id: int):
         summen=service.summen(con, r), verlauf=service.verlauf(con, rechnung_id),
         pruefliste=service.pruefliste(con, r) if r["status"] == "entwurf" else [],
         dateien=service.dateien(_verzeichnis(), r), einheit_name=leistungen.einheit_name,
-        heute=date.today().isoformat(),
+        heute=date.today().isoformat(), kette=service.belegkette(con, r), ersetzt=service.ersetzt(r),
     )
 
 
@@ -98,7 +99,12 @@ def bearbeiten(rechnung_id: int):
     con = get_db()
     r = _laden_oder_404(rechnung_id)
     if r["status"] != "entwurf":
-        flash("Abgeschlossene Rechnungen können nicht mehr geändert werden.", "fehler")
+        flash("Abgeschlossene Rechnungen können nicht mehr geändert werden. Nutzen Sie „Korrigieren“ oder "
+              "„Stornieren“.", "fehler")
+        return redirect(url_for("rechnungen.detail", rechnung_id=rechnung_id))
+    if r["art"] == "storno":
+        flash("Eine Stornorechnung übernimmt alle Positionen der Originalrechnung. Für Teiländerungen bitte "
+              "den Entwurf löschen und eine Rechnungskorrektur anlegen.", "fehler")
         return redirect(url_for("rechnungen.detail", rechnung_id=rechnung_id))
     if request.method == "POST":
         try:
@@ -113,15 +119,45 @@ def bearbeiten(rechnung_id: int):
         return redirect(url_for("rechnungen.detail", rechnung_id=rechnung_id))
     daten = {k: ("" if r[k] is None else str(r[k])) for k in (*service.KOPF_FELDER, "kunde_id", "ansprechpartner_id")}
     daten["kunde_modus"] = "bestand"
+    daten["korrektur_grund"] = r["korrektur_grund"]
     return _editor(daten, pos.fuer_editor(service.positionen(con, rechnung_id)), {}, r)
+
+
+@bp.post("/<int:rechnung_id>/stornieren")
+def stornieren(rechnung_id: int):
+    _laden_oder_404(rechnung_id)
+    try:
+        neu_id = service.storno_anlegen(get_db(), rechnung_id, request.form.get("korrektur_grund", ""),
+                                        request.form.get("rechnungsdatum") or None)
+    except ValidierungsFehler as e:
+        flash(" ".join(e.fehler.values()), "fehler")
+        return redirect(url_for("rechnungen.detail", rechnung_id=rechnung_id) + "#stornieren")
+    except RechnungsFehler as e:
+        flash(str(e), "fehler")
+        return redirect(url_for("rechnungen.detail", rechnung_id=rechnung_id))
+    flash("Entwurf der Stornorechnung angelegt. Bitte prüfen und abschließen.", "ok")
+    return redirect(url_for("rechnungen.detail", rechnung_id=neu_id))
+
+
+@bp.post("/<int:rechnung_id>/korrigieren")
+def korrigieren(rechnung_id: int):
+    _laden_oder_404(rechnung_id)
+    try:
+        neu_id = service.korrektur_anlegen(get_db(), rechnung_id)
+    except RechnungsFehler as e:
+        flash(str(e), "fehler")
+        return redirect(url_for("rechnungen.detail", rechnung_id=rechnung_id))
+    flash("Entwurf der Rechnungskorrektur angelegt. Bitte Änderungen und Grund eintragen.", "ok")
+    return redirect(url_for("rechnungen.bearbeiten", rechnung_id=neu_id))
 
 
 @bp.post("/<int:rechnung_id>/abschliessen")
 def abschliessen(rechnung_id: int):
-    _laden_oder_404(rechnung_id)
+    r = _laden_oder_404(rechnung_id)
     try:
         xml, _pdf = service.abschliessen(get_db(), _verzeichnis(), rechnung_id)
-        flash(f"Rechnung abgeschlossen. XRechnung und PDF wurden als „{xml.stem}“ im Rechnungsordner abgelegt.", "ok")
+        flash(f"{service.ARTEN[r['art']]} abgeschlossen. XRechnung und PDF wurden als „{xml.stem}“ im "
+              "Rechnungsordner abgelegt.", "ok")
     except RechnungsFehler as e:
         flash(str(e), "fehler")
     return redirect(url_for("rechnungen.detail", rechnung_id=rechnung_id))
@@ -170,8 +206,9 @@ def pdf(rechnung_id: int):
             abort(404)
         return send_file(dateien["pdf"], mimetype="application/pdf", download_name=dateien["pdf"].name, max_age=0)
     inhalt = service.vorschau_pdf(get_db(), _verzeichnis(), rechnung_id)
+    name = {"rechnung": "Rechnungsentwurf", "korrektur": "Korrekturentwurf", "storno": "Stornoentwurf"}[r["art"]]
     return Response(inhalt, mimetype="application/pdf",
-                    headers={"Content-Disposition": f'inline; filename="Rechnungsentwurf_{rechnung_id}.pdf"'})
+                    headers={"Content-Disposition": f'inline; filename="{name}_{rechnung_id}.pdf"'})
 
 
 @bp.get("/<int:rechnung_id>/xml")

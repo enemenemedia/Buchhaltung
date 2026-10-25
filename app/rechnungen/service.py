@@ -30,7 +30,14 @@ from ..stammdaten import service as stammdaten
 
 BEREICH = "rechnung"
 
-STATUS = {"entwurf": "Entwurf", "offen": "Offen", "ueberfaellig": "Überfällig", "bezahlt": "Bezahlt"}
+STATUS = {"entwurf": "Entwurf", "offen": "Offen", "ueberfaellig": "Überfällig", "bezahlt": "Bezahlt",
+          "erstattung_offen": "Erstattung offen", "erledigt": "Erledigt",
+          "storniert": "Storniert", "korrigiert": "Korrigiert"}
+
+# Belegarten: Bezeichnung, Nummernkreis, Zusatz im Dateinamen
+ARTEN = {"rechnung": "Rechnung", "korrektur": "Rechnungskorrektur", "storno": "Stornorechnung"}
+PRAEFIX = {"rechnung": "RE", "korrektur": "KR", "storno": "ST"}
+DATEI_ZUSATZ = {"rechnung": "", "korrektur": "korrektur", "storno": "storno"}
 
 KOPF_FELDER = ("rechnungsdatum", "leistung_von", "leistung_bis", "zahlungsziel_tage", "betreff", "anmerkungen",
                "kaeufer_referenz", "bestellnummer", "befreiung_art", "befreiung_grund")
@@ -75,15 +82,34 @@ def _de(iso: str | None) -> str:
     return date.fromisoformat(iso).strftime("%d.%m.%Y") if iso else ""
 
 
+def offener_betrag(r):
+    """Zahlbetrag (BT-115): Gesamtbetrag abzüglich bereits auf das Original gezahlter Beträge."""
+    return zahlen.parsen(r["summe_gesamt"]) - zahlen.parsen(r["vorausbezahlt"] or "0")
+
+
 def anzeige_status(r, stichtag: date | None = None) -> str:
+    """Status für die Anzeige. Eine Rechnung mit abgeschlossenem Storno bzw. abgeschlossener
+    Korrektur gilt als „storniert“ bzw. „korrigiert“ und ist nicht mehr offen."""
+    if r["folge_art"] and r["folge_status"] != "entwurf":
+        return "storniert" if r["folge_art"] == "storno" else "korrigiert"
+    if r["status"] == "offen" and (r["art"] == "storno" or offener_betrag(r) < 0):
+        return "erstattung_offen"
+    if r["status"] == "bezahlt" and r["art"] == "storno":
+        return "erledigt"
     if r["status"] == "offen" and date.fromisoformat(r["faellig_am"]) < (stichtag or heute()):
         return "ueberfaellig"
     return r["status"]
 
 
-def naechste_nummer(con: sqlite3.Connection, jahr: int) -> str:
-    """Fortlaufende Rechnungsnummer je Jahr: RE-2026-0001, RE-2026-0002, …"""
-    praefix = f"RE-{jahr}-"
+def ersetzt(r) -> bool:
+    """True, wenn die Rechnung durch ein abgeschlossenes Storno bzw. eine Korrektur ersetzt ist."""
+    return bool(r["folge_art"]) and r["folge_status"] != "entwurf"
+
+
+def naechste_nummer(con: sqlite3.Connection, jahr: int, art: str = "rechnung") -> str:
+    """Fortlaufende Nummer je Jahr und Belegart: RE-2026-0001 (Rechnung),
+    KR-2026-0001 (Rechnungskorrektur), ST-2026-0001 (Stornorechnung)."""
+    praefix = f"{PRAEFIX[art]}-{jahr}-"
     hoechste = 0
     for (nr,) in con.execute("SELECT nummer FROM rechnungen WHERE nummer LIKE ?", (praefix + "%",)):
         m = re.fullmatch(rf"{re.escape(praefix)}(\d+)", nr or "")
@@ -92,9 +118,15 @@ def naechste_nummer(con: sqlite3.Connection, jahr: int) -> str:
     return f"{praefix}{hoechste + 1:04d}"
 
 
-def dateiname(rechnungsdatum: str, nummer: str, kundennummer: str) -> str:
-    """Gemeinsamer Name für XML und PDF: Datum, Rechnungsnummer, Kundennummer."""
-    return f"{rechnungsdatum}_{nummer}_{kundennummer}"
+def dateiname(rechnungsdatum: str, nummer: str, kundennummer: str, art: str = "rechnung",
+              bezug_nummer: str | None = None) -> str:
+    """Gemeinsamer Name für XML und PDF: Datum, Nummer, Kundennummer – bei Storno und
+    Korrektur zusätzlich die Belegart und die Nummer der Originalrechnung, z. B.
+    2026-10-26_ST-2026-0001_K00001_storno_zu_RE-2026-0001."""
+    name = f"{rechnungsdatum}_{nummer}_{kundennummer}"
+    if DATEI_ZUSATZ[art]:
+        name += f"_{DATEI_ZUSATZ[art]}_zu_{bezug_nummer}"
+    return name
 
 
 def empfaenger_text(kunde, ap=None) -> str:
@@ -111,11 +143,22 @@ def empfaenger_text(kunde, ap=None) -> str:
 # Lesen
 # ---------------------------------------------------------------------------
 
+# Jede Abfrage liefert zusätzlich den Bezug (Originalrechnung) und die Folge (Storno/Korrektur).
+_SELECT = """
+    SELECT r.*, k.firma AS kunde_firma, k.kundennummer, k.archiviert_am AS kunde_archiviert,
+           a.nummer AS angebot_nummer,
+           o.nummer AS bezug_nummer, o.rechnungsdatum AS bezug_datum, o.status AS bezug_status,
+           f.id AS folge_id, f.art AS folge_art, f.nummer AS folge_nummer, f.status AS folge_status
+      FROM rechnungen r
+      JOIN kunden k ON k.id = r.kunde_id
+      LEFT JOIN angebote a ON a.id = r.angebot_id
+      LEFT JOIN rechnungen o ON o.id = r.bezug_id
+      LEFT JOIN rechnungen f ON f.bezug_id = r.id
+"""
+
+
 def laden(con: sqlite3.Connection, rechnung_id: int) -> sqlite3.Row:
-    r = con.execute(
-        "SELECT r.*, k.firma AS kunde_firma, k.kundennummer, k.archiviert_am AS kunde_archiviert, "
-        "a.nummer AS angebot_nummer FROM rechnungen r JOIN kunden k ON k.id = r.kunde_id "
-        "LEFT JOIN angebote a ON a.id = r.angebot_id WHERE r.id = ?", (rechnung_id,)).fetchone()
+    r = con.execute(_SELECT + " WHERE r.id = ?", (rechnung_id,)).fetchone()
     if r is None:
         raise RechnungsFehler("Rechnung nicht gefunden.")
     return r
@@ -126,39 +169,52 @@ def positionen(con: sqlite3.Connection, rechnung_id: int) -> list[sqlite3.Row]:
                        (rechnung_id,)).fetchall()
 
 
+def anzeige_positionen(r, pos_liste) -> list[dict]:
+    """Positionen für Anzeige und PDF: bei der Stornorechnung mit negativer Menge,
+    damit alle Beträge als Gutschrift (negativ) erscheinen."""
+    if r["art"] != "storno":
+        return [dict(p) for p in pos_liste]
+    return [{**dict(p), "menge": zahlen.speicherform(-zahlen.parsen(p["menge"]))} for p in pos_liste]
+
+
 def summen(con: sqlite3.Connection, r) -> berechnung.Summen:
     # Rechnungen werden immer netto-basiert berechnet (wie in der XRechnung)
-    return berechnung.berechnen(positionen(con, r["id"]), bool(r["kleinunternehmer"]), "netto")
+    return berechnung.berechnen(anzeige_positionen(r, positionen(con, r["id"])), bool(r["kleinunternehmer"]), "netto")
 
 
 def liste(con: sqlite3.Connection, suche: str = "", status: str = "") -> list[sqlite3.Row]:
-    sql = ("SELECT r.*, k.firma AS kunde_firma, k.kundennummer FROM rechnungen r "
-           "JOIN kunden k ON k.id = r.kunde_id WHERE 1 = 1")
+    sql = _SELECT + " WHERE 1 = 1"
     params: list = []
-    tag = heute().isoformat()
-    if status == "ueberfaellig":
-        sql += " AND r.status = 'offen' AND r.faellig_am < ?"
-        params.append(tag)
-    elif status == "offen":
-        sql += " AND r.status = 'offen' AND r.faellig_am >= ?"
-        params.append(tag)
-    elif status in ("entwurf", "bezahlt"):
-        sql += " AND r.status = ?"
-        params.append(status)
     if suche:
-        sql += " AND (r.nummer LIKE ? OR r.betreff LIKE ? OR k.firma LIKE ? OR k.kundennummer LIKE ?)"
-        params += [f"%{suche}%"] * 4
+        sql += (" AND (r.nummer LIKE ? OR r.betreff LIKE ? OR k.firma LIKE ? OR k.kundennummer LIKE ?"
+                " OR o.nummer LIKE ?)")
+        params += [f"%{suche}%"] * 5
     sql += " ORDER BY r.status = 'entwurf' DESC, r.rechnungsdatum DESC, r.id DESC"
-    return con.execute(sql, params).fetchall()
+    zeilen = con.execute(sql, params).fetchall()
+    if status:
+        zeilen = [z for z in zeilen if anzeige_status(z) == status]
+    return zeilen
 
 
 def fuer_kunde(con: sqlite3.Connection, kunde_id: int) -> list[sqlite3.Row]:
-    return con.execute("SELECT * FROM rechnungen WHERE kunde_id = ? ORDER BY rechnungsdatum DESC, id DESC",
+    return con.execute(_SELECT + " WHERE r.kunde_id = ? ORDER BY r.rechnungsdatum DESC, r.id DESC",
                        (kunde_id,)).fetchall()
 
 
 def fuer_angebot(con: sqlite3.Connection, angebot_id: int) -> list[sqlite3.Row]:
-    return con.execute("SELECT * FROM rechnungen WHERE angebot_id = ? ORDER BY id", (angebot_id,)).fetchall()
+    return con.execute(_SELECT + " WHERE r.angebot_id = ? ORDER BY r.id", (angebot_id,)).fetchall()
+
+
+def belegkette(con: sqlite3.Connection, r) -> list[sqlite3.Row]:
+    """Alle zusammengehörigen Belege – vom ursprünglichen Original bis zur letzten Korrektur
+    bzw. zum Storno – in zeitlicher Reihenfolge."""
+    start = r
+    while start["bezug_id"]:
+        start = laden(con, start["bezug_id"])
+    kette = [start]
+    while kette[-1]["folge_id"]:
+        kette.append(laden(con, kette[-1]["folge_id"]))
+    return kette if len(kette) > 1 else []
 
 
 def verlauf(con: sqlite3.Connection, rechnung_id: int) -> list[dict]:
@@ -166,15 +222,22 @@ def verlauf(con: sqlite3.Connection, rechnung_id: int) -> list[dict]:
 
 
 def summen_offen(con: sqlite3.Connection) -> dict:
-    """Kennzahlen für die Liste: offene und überfällige Beträge."""
-    tag = heute().isoformat()
-    offen = ueberfaellig = zahlen.parsen("0")
-    for r in con.execute("SELECT summe_gesamt, faellig_am FROM rechnungen WHERE status = 'offen'"):
-        betrag = zahlen.parsen(r["summe_gesamt"])
+    """Kennzahlen für die Liste: offene, überfällige Forderungen und offene Erstattungen.
+    Stornierte bzw. korrigierte Rechnungen zählen nicht mehr."""
+    null = zahlen.parsen("0")
+    offen = ueberfaellig = erstattung = null
+    for r in con.execute(_SELECT + " WHERE r.status = 'offen'"):
+        st = anzeige_status(r)
+        betrag = offener_betrag(r)
+        if st in ("storniert", "korrigiert"):
+            continue
+        if st == "erstattung_offen":
+            erstattung += abs(betrag)
+            continue
         offen += betrag
-        if r["faellig_am"] < tag:
+        if st == "ueberfaellig":
             ueberfaellig += betrag
-    return {"offen": offen, "ueberfaellig": ueberfaellig}
+    return {"offen": offen, "ueberfaellig": ueberfaellig, "erstattung": erstattung}
 
 
 # ---------------------------------------------------------------------------
@@ -207,12 +270,15 @@ def vorgaben(con: sqlite3.Connection, kunde_id: int | None = None) -> dict:
     return daten
 
 
-def eingabe_pruefen(con: sqlite3.Connection, form) -> Eingabe:
+def eingabe_pruefen(con: sqlite3.Connection, form, fester_kunde: int | None = None) -> Eingabe:
+    """fester_kunde: bei Rechnungskorrekturen bleibt der Kunde der Originalrechnung."""
     fehler: dict[str, str] = {}
     g = lambda name: (form.get(name) or "").strip()  # noqa: E731
     kopf = {f: g(f) for f in KOPF_FELDER}
     kopf["kunde_id"], kopf["ansprechpartner_id"] = g("kunde_id"), g("ansprechpartner_id")
     modus = g("kunde_modus") or "bestand"
+    if fester_kunde is not None:
+        modus, kopf["kunde_id"] = "bestand", str(fester_kunde)
     e = Eingabe(kopf=kopf, positionen=[], fehler=fehler)
 
     # --- Kunde -------------------------------------------------------------
@@ -306,12 +372,13 @@ def _kopf_anzeige(con, kopf: dict) -> dict:
     }
 
 
-def _schreiben(con, rechnung_id: int, e: Eingabe, einstellungen) -> berechnung.Summen:
+def _schreiben(con, rechnung_id: int, e: Eingabe, einstellungen, klein: bool | None = None) -> berechnung.Summen:
     kunde = kunden.laden(con, int(e.kopf["kunde_id"]))
     ap = None
     if e.kopf["ansprechpartner_id"]:
         ap = con.execute("SELECT * FROM ansprechpartner WHERE id = ?", (int(e.kopf["ansprechpartner_id"]),)).fetchone()
-    klein = bool(einstellungen["kleinunternehmer"])
+    if klein is None:
+        klein = bool(einstellungen["kleinunternehmer"])
     s = berechnung.berechnen(e.positionen, klein, "netto")
     k = e.kopf
     con.execute(
@@ -363,7 +430,16 @@ def aendern(con: sqlite3.Connection, datenverzeichnis: Path, rechnung_id: int, f
     alt = laden(con, rechnung_id)
     if alt["status"] != "entwurf":
         raise RechnungsFehler("Abgeschlossene Rechnungen können nicht geändert werden.")
-    e = eingabe_pruefen(con, form)
+    if alt["art"] == "storno":
+        raise RechnungsFehler("Eine Stornorechnung übernimmt alle Positionen der Originalrechnung und kann nicht "
+                              "bearbeitet werden. Für Teiländerungen bitte eine Rechnungskorrektur verwenden.")
+    korrektur = alt["art"] == "korrektur"
+    e = eingabe_pruefen(con, form, alt["kunde_id"] if korrektur else None)
+    grund = (form.get("korrektur_grund") or "").strip()
+    if korrektur and not grund:
+        e.fehler["korrektur_grund"] = "Bitte den Grund der Korrektur angeben."
+    elif len(grund) > 500:
+        e.fehler["korrektur_grund"] = "Höchstens 500 Zeichen."
     if e.fehler:
         raise ValidierungsFehler(e.fehler)
     hinweise: list[str] = []
@@ -376,9 +452,12 @@ def aendern(con: sqlite3.Connection, datenverzeichnis: Path, rechnung_id: int, f
     alt_kopf = {f: ("" if alt[f] is None else str(alt[f])) for f in (*KOPF_FELDER, "kunde_id", "ansprechpartner_id")}
     with con:
         hinweise += pos.freie_uebernehmen(con, e.positionen, f"Rechnungsentwurf #{rechnung_id}")
-        s = _schreiben(con, rechnung_id, e, einstellungen)
+        s = _schreiben(con, rechnung_id, e, einstellungen, bool(alt["kleinunternehmer"]) if korrektur else None)
         a_alt, a_neu = _kopf_anzeige(con, alt_kopf), _kopf_anzeige(con, e.kopf)
         felder = {KOPF_BEZEICHNUNG[k]: [a_alt[k], a_neu[k]] for k in a_neu if a_alt[k] != a_neu[k]}
+        if korrektur and grund != alt["korrektur_grund"]:
+            con.execute("UPDATE rechnungen SET korrektur_grund = ? WHERE id = ?", (grund, rechnung_id))
+            felder["Grund der Korrektur"] = [alt["korrektur_grund"], grund]
         p_alt, p_neu = pos.als_text(alte_pos), pos.als_text(e.positionen)
         if p_alt != p_neu:
             geaendert = [*(f"Entfernt: {t}" for t in p_alt if t not in p_neu),
@@ -475,6 +554,13 @@ def pruefliste(con: sqlite3.Connection, r) -> list[Pruefpunkt]:
     if kunde["archiviert_am"]:
         punkte.append(Pruefpunkt(False, "Kunde ist archiviert", "kunde", "Kunden zuerst reaktivieren."))
 
+    if r["art"] != "rechnung":
+        was = "Stornierung" if r["art"] == "storno" else "Korrektur"
+        punkte.append(Pruefpunkt(True, "Bezug auf die Originalrechnung (BT-25/BT-26)", "rechnung",
+                                 f"{r['bezug_nummer']} vom {_de(r['bezug_datum'])}"))
+        punkte.append(Pruefpunkt(bool(r["korrektur_grund"]), f"Grund der {was}", "rechnung",
+                                 r["korrektur_grund"] or "Bitte angeben."))
+
     pos_liste = positionen(con, r["id"])
     punkte.append(Pruefpunkt(bool(pos_liste), "Mindestens eine Rechnungsposition", "rechnung"))
     punkte.append(Pruefpunkt(bool(r["leistung_von"]), "Leistungsdatum bzw. -zeitraum (§ 14 UStG)", "rechnung"))
@@ -556,8 +642,14 @@ def abschliessen(con: sqlite3.Connection, datenverzeichnis: Path, rechnung_id: i
     ap = None
     if r["ansprechpartner_id"]:
         ap = con.execute("SELECT * FROM ansprechpartner WHERE id = ?", (r["ansprechpartner_id"],)).fetchone()
-    nummer = naechste_nummer(con, date.fromisoformat(r["rechnungsdatum"]).year)
-    name = dateiname(r["rechnungsdatum"], nummer, kunde["kundennummer"])
+    art = r["art"]
+    nummer = naechste_nummer(con, date.fromisoformat(r["rechnungsdatum"]).year, art)
+    name = dateiname(r["rechnungsdatum"], nummer, kunde["kundennummer"], art, r["bezug_nummer"])
+    bezug = None
+    if art != "rechnung":
+        original = laden(con, r["bezug_id"])
+        bezug = {"id": original["id"], "nummer": original["nummer"], "datum": original["rechnungsdatum"],
+                 "bezahlt": original["status"] == "bezahlt"}
     relativ = Path("kunden") / kunde["kundennummer"] / "rechnungen" / name
     basis = Path(datenverzeichnis) / relativ
     xml_pfad, pdf_pfad = basis.with_name(name + ".xml"), basis.with_name(name + ".pdf")
@@ -567,34 +659,62 @@ def abschliessen(con: sqlite3.Connection, datenverzeichnis: Path, rechnung_id: i
     basis.parent.mkdir(parents=True, exist_ok=True)
 
     verkaeufer, kaeufer = _verkaeufer(einstellungen), _kaeufer(kunde, ap)
-    klein = bool(einstellungen["kleinunternehmer"])
+    # Storno und Korrektur folgen der steuerlichen Behandlung der Originalrechnung
+    klein = bool(r["kleinunternehmer"]) if art != "rechnung" else bool(einstellungen["kleinunternehmer"])
     pos_liste = [dict(p) for p in positionen(con, rechnung_id)]
-    s = berechnung.berechnen(pos_liste, klein, "netto")
+    # Bei der Korrektur: bereits auf das Original gezahlter Betrag (BT-113)
+    vorausbezahlt = _auf_original_gezahlt(con, r["bezug_id"]) if art == "korrektur" else zahlen.parsen("0")
     kopf = {**dict(r), "nummer": nummer, "status": "offen", "kleinunternehmer": int(klein),
             "kaeufer_referenz": r["kaeufer_referenz"] or kunde["leitweg_id"] or kunde["kundennummer"],
-            "empfaenger": empfaenger_text(kunde, ap), "kaeufer_ust_id": kunde["ust_id"]}
+            "empfaenger": empfaenger_text(kunde, ap), "kaeufer_ust_id": kunde["ust_id"],
+            "vorausbezahlt": zahlen.speicherform(vorausbezahlt),
+            "bezug_bezahlt": bool(bezug and bezug["bezahlt"])}
 
-    xml = xrechnung.erzeugen(kopf, pos_liste, verkaeufer, kaeufer)
+    # XML immer mit positiven Werten (bei der Gutschrift ergibt sich das Vorzeichen aus Typ 381),
+    # Anzeige, PDF und gespeicherte Summen beim Storno negativ.
+    xml = xrechnung.erzeugen(kopf, pos_liste, verkaeufer, kaeufer, art=art, bezug=bezug)
     _xml_pruefen(xml)
-    pdf = dokument.erzeugen(kopf, pos_liste, verkaeufer, datenverzeichnis)
+    anzeige = anzeige_positionen(r, pos_liste)
+    s = berechnung.berechnen(anzeige, klein, "netto")
+    kopf["summe_gesamt"] = zahlen.speicherform(s.gesamt)
+    pdf = dokument.erzeugen(kopf, anzeige, verkaeufer, datenverzeichnis)
+    # Storno einer offenen Rechnung ist mit der Verrechnung erledigt; sonst ist die Erstattung offen.
+    # Eine Korrektur ohne Restbetrag ist mit der bereits geleisteten Zahlung beglichen.
+    neuer_status = "offen"
+    if (art == "storno" and not bezug["bezahlt"]) or (art == "korrektur" and s.gesamt - vorausbezahlt == 0):
+        neuer_status = "bezahlt"
     try:
         with con:
             jetzt = protokoll.jetzt()
             con.execute(
                 "UPDATE rechnungen SET nummer = ?, status = 'offen', kleinunternehmer = ?, kaeufer_referenz = ?, "
                 "empfaenger = ?, verkaeufer = ?, kaeufer = ?, summe_netto = ?, summe_ust = ?, summe_gesamt = ?, "
-                "dateiname = ?, abgeschlossen_am = ?, geaendert_am = ? WHERE id = ? AND status = 'entwurf'",
+                "vorausbezahlt = ?, dateiname = ?, abgeschlossen_am = ?, geaendert_am = ? "
+                "WHERE id = ? AND status = 'entwurf'",
                 (nummer, int(klein), kopf["kaeufer_referenz"], kopf["empfaenger"],
                  json.dumps(verkaeufer, ensure_ascii=False), json.dumps(kaeufer, ensure_ascii=False),
                  zahlen.speicherform(s.netto), zahlen.speicherform(s.ust), zahlen.speicherform(s.gesamt),
-                 relativ.as_posix(), jetzt, jetzt, rechnung_id))
+                 zahlen.speicherform(vorausbezahlt), relativ.as_posix(), jetzt, jetzt, rechnung_id))
+            if neuer_status == "bezahlt":
+                con.execute("UPDATE rechnungen SET status = 'bezahlt', bezahlt_am = ? WHERE id = ?",
+                            (r["rechnungsdatum"], rechnung_id))
             xml_pfad.write_bytes(xml)
             pdf_pfad.write_bytes(pdf)
-            protokoll.schreiben(con, BEREICH, rechnung_id, "abgeschlossen", {"hinweise": [
-                f"Rechnungsnummer {nummer} vergeben",
-                f"XRechnung abgelegt: {relativ.as_posix()}.xml",
-                f"PDF abgelegt: {relativ.as_posix()}.pdf",
-                f"Gesamtbetrag {zahlen.geld(s.gesamt)}, fällig am {_de(r['faellig_am'])}"]})
+            hinweise = [f"Rechnungsnummer {nummer} vergeben" if art == "rechnung" else f"Nummer {nummer} vergeben",
+                        f"XRechnung abgelegt: {relativ.as_posix()}.xml", f"PDF abgelegt: {relativ.as_posix()}.pdf"]
+            if art == "storno":
+                hinweise.append(f"Gutschrift {zahlen.geld(s.gesamt)} – "
+                                + ("Erstattung offen" if bezug["bezahlt"] else "mit der Originalrechnung verrechnet"))
+            elif art == "korrektur" and vorausbezahlt:
+                hinweise.append(f"Gesamtbetrag {zahlen.geld(s.gesamt)}, bereits gezahlt {zahlen.geld(vorausbezahlt)}, "
+                                f"Differenz {zahlen.geld(s.gesamt - vorausbezahlt)}")
+            else:
+                hinweise.append(f"Gesamtbetrag {zahlen.geld(s.gesamt)}, fällig am {_de(r['faellig_am'])}")
+            protokoll.schreiben(con, BEREICH, rechnung_id, "abgeschlossen", {"hinweise": hinweise})
+            if bezug:
+                protokoll.schreiben(con, BEREICH, bezug["id"], "storniert" if art == "storno" else "korrigiert",
+                                    {"hinweise": [f"{ARTEN[art]} {nummer} vom {_de(r['rechnungsdatum'])}"
+                                                  + (f" – Grund: {r['korrektur_grund']}" if r["korrektur_grund"] else "")]})
             if r["angebot_id"]:
                 protokoll.schreiben(con, "angebot", r["angebot_id"], "rechnung",
                                     {"hinweise": [f"Rechnung {nummer} gestellt"]})
@@ -613,7 +733,11 @@ def vorschau_pdf(con: sqlite3.Connection, datenverzeichnis: Path, rechnung_id: i
     kunde = kunden.laden(con, r["kunde_id"])
     kopf = {**dict(r), "kaeufer_referenz": r["kaeufer_referenz"] or kunde["leitweg_id"] or kunde["kundennummer"],
             "kaeufer_ust_id": kunde["ust_id"]}
-    return dokument.erzeugen(kopf, [dict(p) for p in positionen(con, rechnung_id)],
+    if r["art"] == "korrektur":
+        kopf["vorausbezahlt"] = zahlen.speicherform(_auf_original_gezahlt(con, r["bezug_id"]))
+    if r["art"] != "rechnung":
+        kopf["bezug_bezahlt"] = r["bezug_status"] == "bezahlt"
+    return dokument.erzeugen(kopf, anzeige_positionen(r, positionen(con, rechnung_id)),
                              _verkaeufer(stammdaten.laden(con)), datenverzeichnis)
 
 
@@ -634,6 +758,8 @@ def bezahlt_setzen(con: sqlite3.Connection, rechnung_id: int, datum: str) -> Non
     r = laden(con, rechnung_id)
     if r["status"] != "offen":
         raise RechnungsFehler("Nur offene Rechnungen können als bezahlt markiert werden.")
+    if ersetzt(r):
+        raise RechnungsFehler(f"Die Rechnung ist durch {r['folge_nummer']} ersetzt; bitte die Zahlung dort erfassen.")
     d = _datum(datum)
     if d is None:
         raise RechnungsFehler("Bitte ein gültiges Zahlungsdatum angeben.")
@@ -650,6 +776,10 @@ def zahlung_zuruecksetzen(con: sqlite3.Connection, rechnung_id: int) -> None:
     r = laden(con, rechnung_id)
     if r["status"] != "bezahlt":
         raise RechnungsFehler("Die Rechnung ist nicht als bezahlt markiert.")
+    if ersetzt(r):
+        raise RechnungsFehler(f"Die Rechnung ist durch {r['folge_nummer']} ersetzt; die Zahlung ist dort berücksichtigt.")
+    if r["art"] == "storno" and r["bezug_status"] != "bezahlt":
+        raise RechnungsFehler("Dieses Storno wurde mit der Originalrechnung verrechnet.")
     with con:
         con.execute("UPDATE rechnungen SET status = 'offen', bezahlt_am = NULL, geaendert_am = ? WHERE id = ?",
                     (protokoll.jetzt(), rechnung_id))
@@ -664,5 +794,91 @@ def loeschen(con: sqlite3.Connection, rechnung_id: int) -> sqlite3.Row:
     with con:
         con.execute("DELETE FROM rechnungen WHERE id = ?", (rechnung_id,))
         protokoll.schreiben(con, BEREICH, rechnung_id, "geloescht",
-                            {"hinweise": [f"Entwurf #{rechnung_id} für {r['kunde_firma']}"]})
+                            {"hinweise": [f"Entwurf #{rechnung_id} ({ARTEN[r['art']]}) für {r['kunde_firma']}"]})
+        if r["bezug_id"]:
+            protokoll.schreiben(con, BEREICH, r["bezug_id"], "geaendert",
+                                {"hinweise": [f"Entwurf {ARTEN[r['art']]} #{rechnung_id} gelöscht"]})
     return r
+
+
+# ---------------------------------------------------------------------------
+# Storno und Korrektur
+# ---------------------------------------------------------------------------
+
+def _auf_original_gezahlt(con: sqlite3.Connection, original_id: int):
+    """Was auf die Originalrechnung bereits gezahlt wurde: der volle Betrag, wenn sie bezahlt ist,
+    sonst ein eventuell schon auf deren Vorgänger gezahlter Betrag."""
+    o = laden(con, original_id)
+    if o["status"] == "bezahlt":
+        return zahlen.parsen(o["summe_gesamt"])
+    return zahlen.parsen(o["vorausbezahlt"] or "0")
+
+
+def _original_pruefen(con: sqlite3.Connection, original_id: int, aktion: str):
+    o = laden(con, original_id)
+    if o["status"] == "entwurf":
+        raise RechnungsFehler(f"Entwürfe können nicht {aktion} werden – bitte direkt bearbeiten oder löschen.")
+    if o["art"] == "storno":
+        raise RechnungsFehler("Eine Stornorechnung kann nicht storniert oder korrigiert werden.")
+    if o["folge_id"]:
+        art = ARTEN[o["folge_art"]]
+        raise RechnungsFehler(f"Zu dieser Rechnung gibt es bereits eine {art} "
+                              f"({o['folge_nummer'] or 'Entwurf #' + str(o['folge_id'])}).")
+    if o["kunde_archiviert"]:
+        raise RechnungsFehler("Der Kunde ist archiviert. Bitte zuerst reaktivieren.")
+    return o
+
+
+def _beleg_kopieren(con, o, art: str, *, datum: str, grund: str, zahlungsziel: int) -> int:
+    faellig = (date.fromisoformat(datum) + timedelta(days=zahlungsziel)).isoformat()
+    cur = con.execute(
+        "INSERT INTO rechnungen (kunde_id, ansprechpartner_id, art, bezug_id, korrektur_grund, rechnungsdatum, "
+        "leistung_von, leistung_bis, zahlungsziel_tage, faellig_am, betreff, anmerkungen, kaeufer_referenz, "
+        "bestellnummer, befreiung_art, befreiung_grund, kleinunternehmer, empfaenger, summe_netto, summe_ust, "
+        "summe_gesamt, erstellt_am, geaendert_am) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (o["kunde_id"], o["ansprechpartner_id"], art, o["id"], grund, datum, o["leistung_von"], o["leistung_bis"],
+         zahlungsziel, faellig, o["betreff"], "" if art == "storno" else o["anmerkungen"], o["kaeufer_referenz"],
+         o["bestellnummer"], o["befreiung_art"], o["befreiung_grund"], o["kleinunternehmer"], o["empfaenger"],
+         *(zahlen.speicherform(-zahlen.parsen(o[f])) if art == "storno" else o[f]
+           for f in ("summe_netto", "summe_ust", "summe_gesamt")),
+         protokoll.jetzt(), protokoll.jetzt()))
+    neu_id = cur.lastrowid
+    pos.schreiben(con, "rechnung_positionen", "rechnung_id", neu_id,
+                  [{**dict(p)} for p in positionen(con, o["id"])])
+    return neu_id
+
+
+def storno_anlegen(con: sqlite3.Connection, original_id: int, grund: str, datum: str | None = None) -> int:
+    """Entwurf einer Stornorechnung über den vollen Betrag der Originalrechnung."""
+    grund = (grund or "").strip()
+    if not grund:
+        raise ValidierungsFehler({"korrektur_grund": "Bitte den Grund der Stornierung angeben."})
+    if len(grund) > 500:
+        raise ValidierungsFehler({"korrektur_grund": "Höchstens 500 Zeichen."})
+    o = _original_pruefen(con, original_id, "storniert")
+    d = _datum(datum) or heute()
+    if d < date.fromisoformat(o["rechnungsdatum"]):
+        raise ValidierungsFehler({"rechnungsdatum": "Das Storno darf nicht vor der Originalrechnung datiert sein."})
+    with con:
+        neu_id = _beleg_kopieren(con, o, "storno", datum=d.isoformat(), grund=grund, zahlungsziel=0)
+        protokoll.schreiben(con, BEREICH, neu_id, "angelegt", {"hinweise": [
+            f"Stornorechnung zu {o['nummer']} vom {_de(o['rechnungsdatum'])}", f"Grund: {grund}",
+            f"Gutschrift {zahlen.geld(-zahlen.parsen(o['summe_gesamt']))}"]})
+        protokoll.schreiben(con, BEREICH, o["id"], "geaendert",
+                            {"hinweise": [f"Entwurf Stornorechnung #{neu_id} angelegt"]})
+    return neu_id
+
+
+def korrektur_anlegen(con: sqlite3.Connection, original_id: int) -> int:
+    """Entwurf einer Rechnungskorrektur mit allen Daten der Originalrechnung zum Bearbeiten."""
+    o = _original_pruefen(con, original_id, "korrigiert")
+    einstellungen = stammdaten.laden(con)
+    with con:
+        neu_id = _beleg_kopieren(con, o, "korrektur", datum=heute().isoformat(), grund="",
+                                 zahlungsziel=int(o["zahlungsziel_tage"] or einstellungen["zahlungsziel_tage"]))
+        protokoll.schreiben(con, BEREICH, neu_id, "angelegt", {"hinweise": [
+            f"Rechnungskorrektur zu {o['nummer']} vom {_de(o['rechnungsdatum'])}",
+            *pos.als_text(positionen(con, o["id"]))]})
+        protokoll.schreiben(con, BEREICH, o["id"], "geaendert",
+                            {"hinweise": [f"Entwurf Rechnungskorrektur #{neu_id} angelegt"]})
+    return neu_id

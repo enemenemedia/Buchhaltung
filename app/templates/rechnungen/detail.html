@@ -1,9 +1,11 @@
 {% extends "base.html" %}
 {% from "_protokoll.html" import protokoll_liste %}
-{% set titel = 'Rechnung ' ~ r.nummer if r.nummer else 'Rechnungsentwurf #' ~ r.id %}
+{% set belegart = RECHNUNG_ARTEN[r.art] %}
+{% set titel = belegart ~ ' ' ~ r.nummer if r.nummer else 'Entwurf ' ~ belegart ~ ' #' ~ r.id %}
 {% block titel %}{{ titel }} – X-Rechnung für KMU{% endblock %}
 {% set st = rechnung_status(r) %}
 {% set bereit = pruefliste and (pruefliste|rejectattr('ok')|list|length == 0) %}
+{% set kann_folgen = r.status != 'entwurf' and r.art != 'storno' and not r.folge_id %}
 
 {% block inhalt %}
 <p class="brotkrumen"><a href="{{ url_for('rechnungen.liste') }}">← Rechnungen</a></p>
@@ -17,17 +19,40 @@
   <div class="knopfgruppe umbruch-erlaubt">
     {% if r.status == 'entwurf' %}
       <a class="knopf" href="{{ url_for('rechnungen.pdf', rechnung_id=r.id) }}" target="_blank" rel="noopener">PDF-Vorschau</a>
-      <a class="knopf" href="{{ url_for('rechnungen.bearbeiten', rechnung_id=r.id) }}">Bearbeiten</a>
+      {% if r.art != 'storno' %}<a class="knopf" href="{{ url_for('rechnungen.bearbeiten', rechnung_id=r.id) }}">Bearbeiten</a>{% endif %}
       <form method="post" action="{{ url_for('rechnungen.abschliessen', rechnung_id=r.id) }}"
-            onsubmit="return confirm('Rechnung abschließen? Die Rechnungsnummer wird vergeben, XRechnung und PDF werden im Rechnungsordner abgelegt. Danach kann die Rechnung nicht mehr geändert werden.')">
+            onsubmit="return confirm('{{ belegart }} abschließen? Die Nummer wird vergeben, XRechnung und PDF werden im Rechnungsordner abgelegt. Danach ist der Beleg unveränderlich.')">
         <button class="knopf knopf-primaer" type="submit" {% if not bereit %}disabled title="Bitte zuerst die fehlenden Angaben ergänzen"{% endif %}>Abschließen &amp; XRechnung erstellen</button>
       </form>
     {% else %}
       <a class="knopf knopf-primaer" href="{{ url_for('rechnungen.pdf', rechnung_id=r.id) }}" target="_blank" rel="noopener">PDF öffnen</a>
       <a class="knopf" href="{{ url_for('rechnungen.xml', rechnung_id=r.id) }}">XRechnung (XML)</a>
+      {% if kann_folgen %}
+        <form method="post" action="{{ url_for('rechnungen.korrigieren', rechnung_id=r.id) }}">
+          <button class="knopf" type="submit" {% if r.kunde_archiviert %}disabled title="Kunde ist archiviert"{% endif %}>Korrigieren</button></form>
+        <a class="knopf knopf-gefahr-rand" href="#stornieren" onclick="document.getElementById('stornieren').open = true">Stornieren</a>
+      {% endif %}
     {% endif %}
   </div>
 </div>
+
+{% if r.art != 'rechnung' %}
+<div class="hinweisbox bezugbox">
+  <strong>{{ belegart }}</strong> zur Rechnung
+  <a href="{{ url_for('rechnungen.detail', rechnung_id=r.bezug_id) }}" class="mono">{{ r.bezug_nummer }}</a> vom {{ r.bezug_datum|datum }}.
+  {% if r.korrektur_grund %}<br>Grund: {{ r.korrektur_grund }}{% endif %}
+  {% if r.art == 'storno' %}<br>Die Stornorechnung übernimmt alle Positionen der Originalrechnung mit negativem Vorzeichen.{% endif %}
+</div>
+{% endif %}
+
+{% if ersetzt %}
+<div class="hinweisbox">Diese Rechnung wurde durch die {{ RECHNUNG_ARTEN[r.folge_art] }}
+  <a href="{{ url_for('rechnungen.detail', rechnung_id=r.folge_id) }}" class="mono">{{ r.folge_nummer }}</a>
+  {{ 'storniert' if r.folge_art == 'storno' else 'ersetzt' }} und ist nicht mehr zahlbar.</div>
+{% elif r.folge_id %}
+<div class="hinweisbox">Es gibt einen Entwurf einer {{ RECHNUNG_ARTEN[r.folge_art] }} zu dieser Rechnung:
+  <a href="{{ url_for('rechnungen.detail', rechnung_id=r.folge_id) }}">Entwurf #{{ r.folge_id }}</a>.</div>
+{% endif %}
 
 {% if r.status == 'entwurf' %}
 <section class="karte pruefung {% if bereit %}bereit{% endif %}">
@@ -40,7 +65,7 @@
           {% if not p.ok %}
             {% if p.bereich == 'stammdaten' %}<a href="{{ url_for('stammdaten.seite') }}">Stammdaten öffnen</a>
             {% elif p.bereich == 'kunde' %}<a href="{{ url_for('kunden.bearbeiten', kunde_id=r.kunde_id) }}">Kunden bearbeiten</a>
-            {% else %}<a href="{{ url_for('rechnungen.bearbeiten', rechnung_id=r.id) }}">Rechnung bearbeiten</a>{% endif %}
+            {% elif r.art != 'storno' %}<a href="{{ url_for('rechnungen.bearbeiten', rechnung_id=r.id) }}">Bearbeiten</a>{% endif %}
           {% endif %}</span>
       </li>
     {% endfor %}
@@ -50,23 +75,42 @@
 <div class="hinweisbox">Diese Rechnung ist seit dem {{ r.faellig_am|datum }} fällig.</div>
 {% endif %}
 
-<div class="spalten">
+{% if kette %}
+<section class="karte">
+  <h2>Zugehörige Belege</h2>
+  <ol class="belegkette">
+    {% for b in kette %}{% set bst = rechnung_status(b) %}
+      <li class="{% if b.id == r.id %}aktuell{% endif %}">
+        <span class="beleg-art art-{{ b.art }}">{{ RECHNUNG_ARTEN[b.art] }}</span>
+        {% if b.id == r.id %}<strong class="mono">{{ b.nummer or 'Entwurf #' ~ b.id }}</strong>
+        {% else %}<a href="{{ url_for('rechnungen.detail', rechnung_id=b.id) }}" class="mono">{{ b.nummer or 'Entwurf #' ~ b.id }}</a>{% endif %}
+        <span class="gedimmt">{{ b.rechnungsdatum|datum }}</span>
+        <span class="zahl-fett">{{ b.summe_gesamt|geld }}</span>
+        <span class="status status-{{ bst }}">{{ RECHNUNG_STATUS[bst] }}</span>
+      </li>
+    {% endfor %}
+  </ol>
+</section>
+{% endif %}
+
+<div class="spalten {% if not kette %}abstand-oben{% endif %}">
   <section class="karte">
     <h2>Empfänger</h2>
     <p class="anschrift">{{ r.empfaenger }}</p>
   </section>
   <section class="karte">
-    <h2>Rechnungsdaten</h2>
+    <h2>Belegdaten</h2>
     <dl class="angaben">
-      <dt>Rechnungs-Nr.</dt><dd class="mono">{{ r.nummer or 'wird beim Abschließen vergeben' }}</dd>
-      <dt>Rechnungsdatum</dt><dd>{{ r.rechnungsdatum|datum }}</dd>
+      <dt>Nummer</dt><dd class="mono">{{ r.nummer or 'wird beim Abschließen vergeben' }}</dd>
+      <dt>Datum</dt><dd>{{ r.rechnungsdatum|datum }}</dd>
+      {% if r.bezug_id %}<dt>Zu Rechnung</dt><dd><a href="{{ url_for('rechnungen.detail', rechnung_id=r.bezug_id) }}" class="mono">{{ r.bezug_nummer }}</a> vom {{ r.bezug_datum|datum }}</dd>{% endif %}
       <dt>{{ 'Leistungszeitraum' if r.leistung_bis else 'Leistungsdatum' }}</dt>
       <dd>{{ r.leistung_von|datum }}{% if r.leistung_bis %} – {{ r.leistung_bis|datum }}{% endif %}</dd>
-      <dt>Fällig am</dt><dd>{{ r.faellig_am|datum }} <span class="gedimmt">({{ r.zahlungsziel_tage }} Tage)</span></dd>
+      {% if r.art != 'storno' %}<dt>Fällig am</dt><dd>{{ r.faellig_am|datum }} <span class="gedimmt">({{ r.zahlungsziel_tage }} Tage)</span></dd>{% endif %}
       {% if r.kaeufer_referenz %}<dt>Käuferreferenz</dt><dd class="mono">{{ r.kaeufer_referenz }}</dd>{% endif %}
       {% if r.bestellnummer %}<dt>Bestellnummer</dt><dd class="mono">{{ r.bestellnummer }}</dd>{% endif %}
       {% if r.angebot_id %}<dt>Angebot</dt><dd><a href="{{ url_for('angebote.detail', angebot_id=r.angebot_id) }}" class="mono">{{ r.angebot_nummer }}</a></dd>{% endif %}
-      {% if r.bezahlt_am %}<dt>Bezahlt am</dt><dd>{{ r.bezahlt_am|datum }}</dd>{% endif %}
+      {% if r.bezahlt_am %}<dt>{{ 'Erledigt am' if r.art == 'storno' else 'Bezahlt am' }}</dt><dd>{{ r.bezahlt_am|datum }}</dd>{% endif %}
     </dl>
   </section>
 </div>
@@ -76,7 +120,8 @@
   <h2>Ablage im Rechnungsordner</h2>
   <ul class="dateiliste">
     <li><span class="dateityp xml">XML</span> <span class="mono">{{ dateien.xml.name }}</span>
-      <span class="gedimmt">XRechnung 3.0 (UBL)</span> <a href="{{ url_for('rechnungen.xml', rechnung_id=r.id) }}">herunterladen</a></li>
+      <span class="gedimmt">XRechnung 3.0 (UBL{{ ', Gutschrift 381' if r.art == 'storno' else (', Korrektur 384' if r.art == 'korrektur' else '') }})</span>
+      <a href="{{ url_for('rechnungen.xml', rechnung_id=r.id) }}">herunterladen</a></li>
     <li><span class="dateityp pdf">PDF</span> <span class="mono">{{ dateien.pdf.name }}</span>
       <span class="gedimmt">Sichtbeleg</span> <a href="{{ url_for('rechnungen.pdf', rechnung_id=r.id) }}" target="_blank" rel="noopener">öffnen</a></li>
   </ul>
@@ -97,7 +142,7 @@
         <td class="umbruch-zelle"><strong>{{ p.bezeichnung }}</strong>
           {% if p.beschreibung %}<div class="gedimmt klein umbruch">{{ p.beschreibung }}</div>{% endif %}
           {% if p.leistungsnummer %}<div class="gedimmt klein mono">{{ p.leistungsnummer }}</div>{% endif %}</td>
-        <td class="rechts">{{ p.menge|menge }} {{ einheit_name(p.einheit_code, p.menge) }}</td>
+        <td class="rechts">{{ z.menge|menge }} {{ einheit_name(p.einheit_code, p.menge) }}</td>
         <td class="rechts">{{ p.einzelpreis|geld }}</td>
         {% if not r.kleinunternehmer %}<td class="rechts">{{ p.ust_satz }} %</td>{% endif %}
         <td class="rechts zahl-fett">{{ z.betrag_netto|geld }}</td>
@@ -108,12 +153,17 @@
   </div>
   <div class="summenblock">
     {% if r.kleinunternehmer %}
-      <div class="summe-gesamt"><span>Rechnungsbetrag</span><span>{{ summen.gesamt|geld }}</span></div>
+      <div class="summe-gesamt"><span>{{ 'Gutschrift' if r.art == 'storno' else 'Rechnungsbetrag' }}</span><span>{{ summen.gesamt|geld }}</span></div>
       <div><span>Gemäß § 19 UStG ohne Umsatzsteuer</span><span></span></div>
     {% else %}
       <div><span>Summe netto</span><span>{{ summen.netto|geld }}</span></div>
       {% for g in summen.steuergruppen %}<div><span>{% if g.satz %}zzgl. {{ g.satz|menge }} % USt{% else %}0 % USt ({{ 'Reverse Charge' if r.befreiung_art == 'AE' else 'steuerfrei' }}){% endif %} auf {{ g.basis|geld }}</span><span>{{ g.betrag|geld }}</span></div>{% endfor %}
-      <div class="summe-gesamt"><span>Rechnungsbetrag</span><span>{{ summen.gesamt|geld }}</span></div>
+      <div class="summe-gesamt"><span>{{ 'Gutschrift' if r.art == 'storno' else 'Rechnungsbetrag' }}</span><span>{{ summen.gesamt|geld }}</span></div>
+    {% endif %}
+    {% if r.art == 'korrektur' and r.vorausbezahlt not in ('0', '') %}
+      {% set rest = offener_betrag(r) %}
+      <div><span>abzüglich bereits gezahlt</span><span>{{ (r.vorausbezahlt|float * -1)|geld }}</span></div>
+      <div class="summe-gesamt"><span>{{ 'Noch zu zahlen' if rest >= 0 else 'Erstattung an den Kunden' }}</span><span>{{ (rest if rest >= 0 else -rest)|geld }}</span></div>
     {% endif %}
   </div>
 </section>
@@ -122,20 +172,38 @@
 <section class="karte"><h2>Anmerkungen &amp; Hinweise</h2><p class="umbruch">{{ r.anmerkungen }}</p></section>
 {% endif %}
 
-{% if r.status in ('offen', 'bezahlt') %}
+{% if r.status in ('offen', 'bezahlt') and not ersetzt and not (r.art == 'storno' and st == 'erledigt' and r.bezug_status != 'bezahlt') %}
+{% set erstattung = st == 'erstattung_offen' or (r.art == 'storno') or (r.art == 'korrektur' and offener_betrag(r) < 0) %}
 <section class="karte">
-  <h2>Zahlung</h2>
+  <h2>{{ 'Erstattung' if erstattung else 'Zahlung' }}</h2>
   {% if r.status == 'offen' %}
   <form method="post" action="{{ url_for('rechnungen.bezahlt', rechnung_id=r.id) }}" class="zeilenformular">
-    <label class="feld"><span>Zahlungseingang am</span><input type="date" name="bezahlt_am" value="{{ heute }}" required></label>
-    <button class="knopf knopf-primaer" type="submit">Als bezahlt markieren</button>
+    <label class="feld"><span>{{ 'Erstattet am' if erstattung else 'Zahlungseingang am' }}</span><input type="date" name="bezahlt_am" value="{{ heute }}" required></label>
+    <button class="knopf knopf-primaer" type="submit">{{ 'Als erstattet markieren' if erstattung else 'Als bezahlt markieren' }}</button>
   </form>
   {% else %}
-  <p>Bezahlt am <strong>{{ r.bezahlt_am|datum }}</strong>.</p>
+  <p>{{ 'Erstattet' if erstattung else 'Bezahlt' }} am <strong>{{ r.bezahlt_am|datum }}</strong>.</p>
   <form method="post" action="{{ url_for('rechnungen.zahlung_zuruecksetzen', rechnung_id=r.id) }}">
-    <button class="knopf" type="submit">Zahlung zurücksetzen</button></form>
+    <button class="knopf" type="submit">Zurücksetzen</button></form>
   {% endif %}
 </section>
+{% endif %}
+
+{% if kann_folgen %}
+<details class="karte storno-karte" id="stornieren">
+  <summary><h2>Rechnung stornieren</h2></summary>
+  <p class="gedimmt">Erstellt eine Stornorechnung (Gutschrift) über den vollen Betrag von {{ r.summe_gesamt|geld }}.
+    {% if r.status == 'bezahlt' %}Da die Rechnung bereits bezahlt ist, wird der Betrag als offene Erstattung geführt.
+    {% else %}Die offene Forderung wird damit verrechnet.{% endif %}
+    Für Teiländerungen verwenden Sie besser „Korrigieren“.</p>
+  <form method="post" action="{{ url_for('rechnungen.stornieren', rechnung_id=r.id) }}" class="raster">
+    <label class="feld s9"><span>Grund der Stornierung <em>*</em></span>
+      <input name="korrektur_grund" maxlength="500" required placeholder="z. B. Auftrag vom Kunden zurückgezogen"></label>
+    <label class="feld s3"><span>Datum</span><input type="date" name="rechnungsdatum" value="{{ heute }}"></label>
+    <div class="s12"><button class="knopf knopf-gefahr" type="submit">Stornorechnung anlegen</button>
+      <span class="gedimmt klein">Es wird zunächst ein Entwurf angelegt.</span></div>
+  </form>
+</details>
 {% endif %}
 
 <section class="karte">
@@ -146,8 +214,8 @@
 {% if r.status == 'entwurf' %}
 <section class="karte gefahr">
   <h2>Entwurf löschen</h2>
-  <p class="gedimmt">Entwürfe haben noch keine Rechnungsnummer und können gelöscht werden.
-    Abgeschlossene Rechnungen müssen aufbewahrt werden und sind gegen Änderung und Löschen geschützt.</p>
+  <p class="gedimmt">Entwürfe haben noch keine Nummer und können gelöscht werden.
+    Abgeschlossene Belege müssen aufbewahrt werden und sind gegen Änderung und Löschen geschützt.</p>
   <form method="post" action="{{ url_for('rechnungen.loeschen', rechnung_id=r.id) }}" onsubmit="return confirm('Entwurf löschen?')">
     <button class="knopf knopf-gefahr-rand" type="submit">Entwurf löschen</button>
   </form>

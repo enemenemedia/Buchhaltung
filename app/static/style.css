@@ -311,11 +311,41 @@ input.fehlerhaft, select.fehlerhaft { border-color: var(--gefahr); background: #
 .zeilenformular { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
 .zeilenformular .feld { width: 200px; }
 
+/* Storno & Korrektur */
+.status-erstattung_offen { background: var(--warn-hell); color: #8a5a00; }
+.status-erledigt { background: var(--akzent-hell); color: var(--akzent); }
+.status-storniert { background: var(--gefahr-hell); color: var(--gefahr); text-decoration: line-through; text-decoration-thickness: 1px; }
+.status-korrigiert { background: #e6eefb; color: #2a4f8f; }
+.kennzahlen-3 { grid-template-columns: repeat(3, minmax(0, 260px)); }
+.beleg-art { display: inline-block; font-family: var(--schrift); font-size: .68rem; font-weight: 700; letter-spacing: .02em;
+  padding: 1px 6px; border-radius: 4px; text-transform: uppercase; }
+.beleg-art.art-rechnung { background: #eceeed; color: #4b5650; }
+.beleg-art.art-storno { background: var(--gefahr-hell); color: var(--gefahr); }
+.beleg-art.art-korrektur { background: #e6eefb; color: #2a4f8f; }
+.beleg-bezug { font-size: .78rem; color: var(--gedimmt); margin-top: 2px; white-space: nowrap; }
+.bezugbox { background: #f3f6fb; border-color: #cddaf0; }
+.belegkette { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; counter-reset: beleg; }
+.belegkette li { display: grid; grid-template-columns: 150px 140px 100px 1fr auto; gap: 12px; align-items: center;
+  padding: 8px 10px; border-left: 3px solid var(--linie); margin-left: 6px; }
+.belegkette li + li { border-top: 1px dashed var(--linie); }
+.belegkette li.aktuell { background: var(--akzent-hell); border-left-color: var(--akzent); border-radius: 0 6px 6px 0; }
+.belegkette .zahl-fett { text-align: right; }
+.storno-karte { border-color: #f4c3bd; }
+.storno-karte summary { cursor: pointer; list-style: none; }
+.storno-karte summary::-webkit-details-marker { display: none; }
+.storno-karte summary h2 { display: inline; color: var(--gefahr); }
+.storno-karte summary::after { content: " ▾"; color: var(--gefahr); }
+.storno-karte[open] summary { margin-bottom: 10px; }
+.korrektur-karte { border-color: #cddaf0; background: #f8fafd; }
+.s9 { grid-column: span 9; }
+
 @media (max-width: 760px) {
   .spalten { grid-template-columns: 1fr; }
   .raster > .feld { grid-column: span 12; }
   .kopf-innen { gap: 16px; }
   .marke span { display: none; }
+  .belegkette li { grid-template-columns: 1fr auto; }
+  .kennzahlen-3 { grid-template-columns: 1fr 1fr; }
   .pos-zeile { grid-template-columns: 1fr 1fr; }
   .pos-nr { grid-column: 1 / -1; flex-direction: row; padding-top: 0; justify-content: space-between; }
   .pos-schieben { flex-direction: row; }

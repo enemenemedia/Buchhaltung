@@ -9,13 +9,14 @@
   </div>
 </div>
 
-<div class="kennzahlen kennzahlen-2">
+<div class="kennzahlen kennzahlen-{{ 3 if kennzahlen.erstattung > 0 else 2 }}">
   <div><strong>{{ kennzahlen.offen|geld }}</strong><span>offen insgesamt</span></div>
   <div class="{% if kennzahlen.ueberfaellig > 0 %}rot{% endif %}"><strong>{{ kennzahlen.ueberfaellig|geld }}</strong><span>davon überfällig</span></div>
+  {% if kennzahlen.erstattung > 0 %}<div><strong>{{ kennzahlen.erstattung|geld }}</strong><span>offene Erstattungen an Kunden</span></div>{% endif %}
 </div>
 
 <form class="filterleiste" method="get">
-  <input type="search" name="q" value="{{ suche }}" placeholder="Rechnungsnummer, Betreff oder Kunde suchen" aria-label="Suche">
+  <input type="search" name="q" value="{{ suche }}" placeholder="Nummer, Original-Nr., Betreff oder Kunde suchen" aria-label="Suche">
   <select name="status" aria-label="Status" onchange="this.form.submit()" class="schmal">
     <option value="">Alle Status</option>
     {% for wert, text in RECHNUNG_STATUS.items() %}<option value="{{ wert }}" {% if status == wert %}selected{% endif %}>{{ text }}</option>{% endfor %}
@@ -30,11 +31,12 @@
   <tbody>
   {% for r in rechnungen %}{% set st = rechnung_status(r) %}
     <tr class="klickbar" onclick="location.href='{{ url_for('rechnungen.detail', rechnung_id=r.id) }}'">
-      <td class="mono"><a href="{{ url_for('rechnungen.detail', rechnung_id=r.id) }}">{{ r.nummer or 'Entwurf #' ~ r.id }}</a></td>
+      <td class="mono"><a href="{{ url_for('rechnungen.detail', rechnung_id=r.id) }}">{{ r.nummer or 'Entwurf #' ~ r.id }}</a>
+        {% if r.art != 'rechnung' %}<div class="beleg-bezug"><span class="beleg-art art-{{ r.art }}">{{ 'Storno' if r.art == 'storno' else 'Korrektur' }}</span> zu {{ r.bezug_nummer }}</div>{% endif %}</td>
       <td>{{ r.rechnungsdatum|datum }}</td>
       <td class="umbruch-zelle">{{ r.kunde_firma }} <span class="gedimmt klein mono">{{ r.kundennummer }}</span></td>
       <td class="umbruch-zelle">{{ r.betreff or '–' }}</td>
-      <td>{{ r.faellig_am|datum }}</td>
+      <td>{{ '–' if r.art == 'storno' else r.faellig_am|datum }}</td>
       <td class="rechts zahl-fett">{{ r.summe_gesamt|geld }}</td>
       <td><span class="status status-{{ st }}">{{ RECHNUNG_STATUS[st] }}</span></td>
     </tr>

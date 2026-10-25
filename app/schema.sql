@@ -250,6 +250,12 @@ CREATE TABLE IF NOT EXISTS rechnungen (
     ansprechpartner_id  INTEGER REFERENCES ansprechpartner (id) ON DELETE SET NULL,
     angebot_id          INTEGER REFERENCES angebote (id) ON DELETE SET NULL,
     status              TEXT    NOT NULL DEFAULT 'entwurf' CHECK (status IN ('entwurf', 'offen', 'bezahlt')),
+    -- Belegart: 'rechnung' (380), 'korrektur' (384, ersetzt die Originalrechnung) oder
+    -- 'storno' (381, Gutschrift über den vollen Betrag der Originalrechnung).
+    art                 TEXT    NOT NULL DEFAULT 'rechnung' CHECK (art IN ('rechnung', 'korrektur', 'storno')),
+    bezug_id            INTEGER REFERENCES rechnungen (id),   -- Originalrechnung (BT-25/26)
+    korrektur_grund     TEXT    NOT NULL DEFAULT '',
+    vorausbezahlt       TEXT    NOT NULL DEFAULT '0',         -- BT-113: auf das Original gezahlt
     rechnungsdatum      TEXT    NOT NULL,                   -- BT-2
     leistung_von        TEXT    NOT NULL,                   -- BT-72 bzw. BT-73
     leistung_bis        TEXT,                               -- BT-74 (Leistungszeitraum)
@@ -275,11 +281,14 @@ CREATE TABLE IF NOT EXISTS rechnungen (
     geaendert_am        TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
     CHECK (leistung_bis IS NULL OR leistung_bis >= leistung_von),
     CHECK (faellig_am >= rechnungsdatum),
-    CHECK (status = 'entwurf' OR nummer IS NOT NULL)
+    CHECK (status = 'entwurf' OR nummer IS NOT NULL),
+    CHECK ((art = 'rechnung') = (bezug_id IS NULL))
 );
 
 CREATE INDEX IF NOT EXISTS idx_rechnungen_kunde ON rechnungen (kunde_id);
 CREATE INDEX IF NOT EXISTS idx_rechnungen_angebot ON rechnungen (angebot_id);
+-- Je Originalrechnung höchstens ein Storno bzw. eine Korrektur (auch als Entwurf).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rechnungen_bezug ON rechnungen (bezug_id) WHERE bezug_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS rechnung_positionen (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -299,7 +308,8 @@ CREATE INDEX IF NOT EXISTS idx_rechnung_positionen ON rechnung_positionen (rechn
 
 -- Abgeschlossene Rechnungen sind unveränderlich (GoBD). Erlaubt sind nur der
 -- Wechsel zwischen „offen“ und „bezahlt“ samt Zahlungsdatum.
-CREATE TRIGGER IF NOT EXISTS rechnungen_schreibschutz
+DROP TRIGGER IF EXISTS rechnungen_schreibschutz;
+CREATE TRIGGER rechnungen_schreibschutz
 BEFORE UPDATE ON rechnungen
 FOR EACH ROW
 WHEN OLD.status <> 'entwurf' AND (
@@ -314,9 +324,22 @@ WHEN OLD.status <> 'entwurf' AND (
     OR NEW.kaeufer IS NOT OLD.kaeufer OR NEW.summe_netto IS NOT OLD.summe_netto
     OR NEW.summe_ust IS NOT OLD.summe_ust OR NEW.summe_gesamt IS NOT OLD.summe_gesamt
     OR NEW.dateiname IS NOT OLD.dateiname OR NEW.abgeschlossen_am IS NOT OLD.abgeschlossen_am
+    OR NEW.art IS NOT OLD.art OR NEW.bezug_id IS NOT OLD.bezug_id
+    OR NEW.korrektur_grund IS NOT OLD.korrektur_grund OR NEW.vorausbezahlt IS NOT OLD.vorausbezahlt
     OR NEW.status = 'entwurf')
 BEGIN
     SELECT RAISE(ABORT, 'Abgeschlossene Rechnungen können nicht geändert werden.');
+END;
+
+-- Storno/Korrektur nur zu abgeschlossenen Rechnungen desselben Kunden, nie zu einem Storno.
+CREATE TRIGGER IF NOT EXISTS rechnungen_bezug_pruefen
+BEFORE INSERT ON rechnungen
+FOR EACH ROW
+WHEN NEW.bezug_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM rechnungen o WHERE o.id = NEW.bezug_id AND o.kunde_id = NEW.kunde_id
+       AND o.status <> 'entwurf' AND o.art <> 'storno')
+BEGIN
+    SELECT RAISE(ABORT, 'Storno/Korrektur nur zu einer abgeschlossenen Rechnung desselben Kunden.');
 END;
 
 CREATE TRIGGER IF NOT EXISTS rechnungen_loeschschutz
