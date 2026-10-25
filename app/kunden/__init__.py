@@ -70,7 +70,13 @@ def detail(kunde_id: int):
         loeschbar=service.ist_loeschbar(kunde),
         ordner=service.kundenordner(current_app.config["DATENVERZEICHNIS"], kunde["kundennummer"]),
         loeschbar_ab=date.fromisoformat(kunde["loeschbar_ab"]) if kunde["loeschbar_ab"] else None,
+        angebote=_angebote(con, kunde_id),
     )
+
+
+def _angebote(con, kunde_id: int):
+    from ..angebote import service as angebote  # spät importieren (gegenseitige Abhängigkeit)
+    return angebote.fuer_kunde(con, kunde_id)
 
 
 @bp.route("/<int:kunde_id>/bearbeiten", methods=["GET", "POST"])

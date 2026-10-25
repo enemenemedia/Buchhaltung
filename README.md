@@ -11,7 +11,7 @@ die Bedienung erfolgt im Browser.
 | Kundenverwaltung | ✅ fertig |
 | Firmenstammdaten (mit Logo) | ✅ fertig |
 | Leistungsverzeichnis (mit Import/Export und Änderungsprotokoll) | ✅ fertig |
-| Angebote | geplant |
+| Angebote (mit PDF) | ✅ fertig |
 | X-Rechnung + PDF | geplant |
 
 ## Starten
@@ -35,7 +35,7 @@ daten/
 │   └── logo_archiv/         frühere Logos
 └── kunden/
     └── K00001/              ein Ordner je Kundennummer
-        ├── angebote/
+        ├── angebote/        z. B. AN-2026-0001.pdf
         ├── rechnungen/
         └── dokumente/
 ```
@@ -93,6 +93,28 @@ daten/
 - **Export** der (gefilterten) Liste als Excel oder CSV – im selben Format wieder importierbar.
 - **Deaktivieren** statt Löschen für nicht mehr angebotene Leistungen; Löschen ist ebenfalls möglich.
 - **Änderungsprotokoll** – jede Änderung (auch per Import) mit Zeitpunkt sowie altem und neuem Wert.
+
+## Angebote
+
+- **Leistungen aus der Liste wählen** – Suchfeld mit Tastatursteuerung; Einheit, Preis,
+  Standardmenge und USt werden übernommen und können im Angebot angepasst werden.
+- **Neue Leistungen direkt eingeben** – frei eingegebene Positionen werden beim Speichern
+  automatisch ins Leistungsverzeichnis übernommen (abwählbar). Gibt es bereits eine Leistung
+  mit gleicher Bezeichnung und Einheit, wird diese verknüpft statt doppelt angelegt.
+- **Eindeutige Zuordnung zum Kunden** – jedes Angebot gehört zu genau einem Kunden
+  (optional mit Ansprechpartner) und wird in den Kundendaten angezeigt.
+- **Preisausweis nach Stammdaten** – Einstellung „Nettopreise zzgl. USt“ oder
+  „Gesamtpreise inkl. USt“; Kleinunternehmer erhalten immer Gesamtpreise ohne USt
+  mit Hinweis auf § 19 UStG. Mehrere Steuersätze (19 %/7 %) werden getrennt ausgewiesen.
+- **Ablaufdatum** – Vorgabe aus den Stammdaten (30 Tage), Schnellwahl 14/30/60/90 Tage;
+  abgelaufene Angebote werden automatisch gekennzeichnet.
+- **Anmerkungen & Hinweise** – Freitext, der im Angebot unter den Leistungen erscheint.
+- **Ablauf** – *Entwurf* (bearbeitbar, PDF-Vorschau mit Wasserzeichen) →
+  *Abschließen* (PDF wird unter `kunden/<Kundennummer>/angebote/` abgelegt, das Angebot
+  ist danach unveränderlich) → *angenommen* / *abgelehnt*. Kopien für neue Versionen.
+  Abgeschlossene Angebote sind zusätzlich per Datenbank-Trigger gegen Änderung und Löschen
+  geschützt.
+- **Nummernkreis** `AN-<Jahr>-0001`, Änderungsprotokoll für alle Schritte.
 
 ## Tests
 

@@ -77,6 +77,35 @@
   </section>
 </div>
 
+<section class="karte abstand-oben" id="angebote">
+  <div class="karte-kopf">
+    <h2>Angebote <span class="gedimmt">({{ angebote|length }})</span></h2>
+    {% if not kunde.archiviert_am %}<a class="knopf" href="{{ url_for('angebote.neu', kunde=kunde.id) }}">+ Neues Angebot</a>{% endif %}
+  </div>
+  {% if angebote %}
+  <div class="tabelle-rahmen">
+  <table class="tabelle kompakt">
+    <thead><tr><th>Nummer</th><th>Datum</th><th>Betreff</th><th>Gültig bis</th><th class="rechts">Betrag</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for a in angebote %}{% set st = angebot_status(a) %}
+      <tr class="klickbar" onclick="location.href='{{ url_for('angebote.detail', angebot_id=a.id) }}'">
+        <td class="mono"><a href="{{ url_for('angebote.detail', angebot_id=a.id) }}">{{ a.nummer }}</a></td>
+        <td>{{ a.datum|datum }}</td>
+        <td class="umbruch-zelle">{{ a.betreff or '–' }}</td>
+        <td>{{ a.gueltig_bis|datum }}</td>
+        <td class="rechts zahl-fett">{{ a.summe_gesamt|geld }}</td>
+        <td><span class="status status-{{ st }}">{{ ANGEBOT_STATUS[st] }}</span>
+          {% if a.pdf_datei %}<a href="{{ url_for('angebote.pdf', angebot_id=a.id) }}" target="_blank" rel="noopener" class="klein" onclick="event.stopPropagation()">PDF</a>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="gedimmt">Für diesen Kunden gibt es noch keine Angebote.</p>
+  {% endif %}
+</section>
+
 <section class="karte">
   <h2>Ablage</h2>
   <p class="gedimmt">Angebote, Rechnungen und Dokumente dieses Kunden werden hier abgelegt:</p>

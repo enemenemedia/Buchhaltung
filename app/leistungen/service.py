@@ -189,6 +189,16 @@ def nach_nummer(con: sqlite3.Connection, nummer: str) -> sqlite3.Row | None:
     return con.execute("SELECT * FROM leistungen WHERE nummer = ?", (nummer,)).fetchone()
 
 
+def gleiche_leistung(con: sqlite3.Connection, bezeichnung: str, einheit_code: str) -> sqlite3.Row | None:
+    """Sucht eine vorhandene Leistung mit gleicher Bezeichnung und Einheit (ohne Groß-/Kleinschreibung)."""
+    # Vergleich in Python, da SQLite lower() keine Umlaute kennt
+    gesucht = " ".join(bezeichnung.split()).casefold()
+    for z in con.execute("SELECT * FROM leistungen WHERE einheit_code = ? ORDER BY aktiv DESC, id", (einheit_code,)):
+        if " ".join(z["bezeichnung"].split()).casefold() == gesucht:
+            return z
+    return None
+
+
 def verlauf(con: sqlite3.Connection, leistung_id: int) -> list[dict]:
     return protokoll.lesen(con, BEREICH, leistung_id)
 
@@ -227,7 +237,8 @@ def _nummer_pruefen(con, d: dict, fehler: dict, eigene_id: int | None) -> None:
         fehler["nummer"] = f"Die Nummer {d['nummer']} ist bereits vergeben."
 
 
-def anlegen(con: sqlite3.Connection, roh: dict, *, quelle: str = "", commit: bool = True) -> int:
+def anlegen(con: sqlite3.Connection, roh: dict, *, quelle: str = "", hinweis: str = "",
+            commit: bool = True) -> int:
     d, fehler = normalisieren(roh)
     _nummer_pruefen(con, d, fehler, None)
     if fehler:
@@ -240,7 +251,9 @@ def anlegen(con: sqlite3.Connection, roh: dict, *, quelle: str = "", commit: boo
     )
     leer = {f: "" for f in FELDER}
     details: dict = {"felder": aenderungen_beschreiben(leer, d)}
-    if quelle:
+    if hinweis:
+        details["hinweise"] = [hinweis]
+    elif quelle:
         details["hinweise"] = [f"Importiert aus {quelle}"]
     protokoll.schreiben(con, BEREICH, cur.lastrowid, "angelegt", details)
     if commit:

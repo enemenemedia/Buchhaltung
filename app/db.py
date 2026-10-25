@@ -15,10 +15,32 @@ def verbinden(pfad: Path) -> sqlite3.Connection:
     return con
 
 
+# Spalten, die nach der ersten Version hinzugekommen sind. CREATE TABLE IF NOT EXISTS
+# legt sie in bestehenden Datenbanken nicht an, daher werden sie hier ergänzt.
+NACHTRAEGLICHE_SPALTEN = {
+    "stammdaten": {
+        "preisausweis": "TEXT NOT NULL DEFAULT 'netto' CHECK (preisausweis IN ('netto', 'brutto'))",
+        "angebot_gueltigkeit_tage": "INTEGER NOT NULL DEFAULT 30",
+    },
+}
+
+
+def _spalten_ergaenzen(con: sqlite3.Connection) -> None:
+    for tabelle, spalten in NACHTRAEGLICHE_SPALTEN.items():
+        vorhanden = {z["name"] for z in con.execute(f"PRAGMA table_info({tabelle})")}
+        if not vorhanden:
+            continue
+        for name, definition in spalten.items():
+            if name not in vorhanden:
+                con.execute(f"ALTER TABLE {tabelle} ADD COLUMN {name} {definition}")
+
+
 def initialisieren(pfad: Path) -> None:
     pfad.parent.mkdir(parents=True, exist_ok=True)
     con = verbinden(pfad)
     try:
+        # Erst fehlende Spalten ergänzen, dann das (idempotente) Schema ausführen
+        _spalten_ergaenzen(con)
         con.executescript(SCHEMA.read_text(encoding="utf-8"))
         con.commit()
     finally:

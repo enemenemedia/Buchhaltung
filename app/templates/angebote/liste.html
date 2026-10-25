@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block titel %}Angebote – X-Rechnung für KMU{% endblock %}
+{% block inhalt %}
+<div class="seitenkopf">
+  <h1>Angebote</h1>
+  <a class="knopf knopf-primaer" href="{{ url_for('angebote.neu') }}">+ Neues Angebot</a>
+</div>
+
+<form class="filterleiste" method="get">
+  <input type="search" name="q" value="{{ suche }}" placeholder="Nummer, Betreff oder Kunde suchen" aria-label="Suche">
+  <select name="status" aria-label="Status" onchange="this.form.submit()" class="schmal">
+    <option value="">Alle Status</option>
+    {% for wert, text in ANGEBOT_STATUS.items() %}
+      <option value="{{ wert }}" {% if status == wert %}selected{% endif %}>{{ text }}</option>
+    {% endfor %}
+  </select>
+  <button class="knopf" type="submit">Suchen</button>
+</form>
+
+{% if angebote %}
+<div class="tabelle-rahmen">
+<table class="tabelle angebote">
+  <thead>
+    <tr><th>Nummer</th><th>Datum</th><th>Kunde</th><th>Betreff</th><th>Gültig bis</th>
+      <th class="rechts">Betrag</th><th>Status</th></tr>
+  </thead>
+  <tbody>
+  {% for a in angebote %}
+    {% set st = angebot_status(a) %}
+    <tr class="klickbar" onclick="location.href='{{ url_for('angebote.detail', angebot_id=a.id) }}'">
+      <td class="mono"><a href="{{ url_for('angebote.detail', angebot_id=a.id) }}">{{ a.nummer }}</a></td>
+      <td>{{ a.datum|datum }}</td>
+      <td class="umbruch-zelle">{{ a.kunde_firma }} <span class="gedimmt klein mono">{{ a.kundennummer }}</span></td>
+      <td class="umbruch-zelle">{{ a.betreff or '–' }}</td>
+      <td>{{ a.gueltig_bis|datum }}
+        {% if st in ('entwurf', 'offen') %}{% set t = angebot_tage(a) %}
+          {% if t <= 7 %}<span class="gedimmt klein">({{ 'heute' if t == 0 else 'noch ' ~ t ~ ' T.' }})</span>{% endif %}
+        {% endif %}</td>
+      <td class="rechts zahl-fett">{{ a.summe_gesamt|geld }}</td>
+      <td><span class="status status-{{ st }}">{{ ANGEBOT_STATUS[st] }}</span></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="hinweis">{{ angebote|length }} Angebot{% if angebote|length != 1 %}e{% endif %} · Beträge = Gesamtbetrag des Angebots</p>
+{% else %}
+<div class="leer">
+  {% if suche or status %}Keine Angebote zu diesem Filter gefunden. <a href="{{ url_for('angebote.liste') }}">Filter zurücksetzen</a>
+  {% else %}<p>Noch keine Angebote erstellt.</p>
+    <p><a class="knopf knopf-primaer" href="{{ url_for('angebote.neu') }}">Erstes Angebot erstellen</a></p>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

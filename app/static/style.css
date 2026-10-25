@@ -81,7 +81,7 @@ h2 { font-size: 1.05rem; margin: 0 0 .9rem; }
 
 /* Karten & Formulare */
 .karte { background: var(--flaeche); border: 1px solid var(--linie); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
-.karte-kopf { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.karte-kopf { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .karte-kopf h2 { margin: 0; }
 .karte.gefahr { border-color: #f4c3bd; }
 .spalten { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -225,11 +225,82 @@ abbr.xr.offen { background: var(--warn-hell); color: #8a5a00; outline: 1px solid
 .optionen label { display: flex; gap: 8px; align-items: center; }
 .optionen input { width: auto; accent-color: var(--akzent); }
 
+/* Angebote */
+.status { display: inline-block; font-size: .78rem; font-weight: 600; padding: 1px 9px; border-radius: 99px; white-space: nowrap; vertical-align: middle; }
+.status.gross { font-size: .85rem; padding: 3px 12px; margin-left: 6px; }
+.status-entwurf { background: #eceeed; color: #4b5650; }
+.status-offen { background: #e6eefb; color: #2a4f8f; }
+.status-abgelaufen { background: var(--warn-hell); color: #8a5a00; }
+.status-angenommen { background: var(--akzent-hell); color: var(--akzent); }
+.status-abgelehnt { background: var(--gefahr-hell); color: var(--gefahr); }
+.anschrift { white-space: pre-line; margin: 0; line-height: 1.6; }
+.knopf-link { border: 0; background: none; padding: 0 4px; color: var(--akzent); text-decoration: underline; cursor: pointer; font: inherit; }
+.schnellwahl { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+.leer-klein { padding: 18px; text-align: center; color: var(--gedimmt); border: 1px dashed var(--linie); border-radius: var(--radius); margin: 0 0 12px; }
+
+#pos-liste { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.pos-zeile { display: grid; grid-template-columns: 34px minmax(220px, 1fr) 82px 112px 112px 78px 124px 28px; gap: 10px;
+  align-items: start; padding: 12px; border: 1px solid var(--linie); border-radius: var(--radius); background: #fbfcfb; }
+.pos-zeile.frei { background: #fffdf7; border-color: #efe3c3; }
+.pos-nr { display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 22px; }
+.pos-zaehler { font-weight: 700; color: var(--gedimmt); }
+.pos-schieben { display: flex; flex-direction: column; gap: 2px; }
+.knopf-mini { border: 1px solid var(--linie); background: #fff; border-radius: 4px; font-size: .62rem; line-height: 1; padding: 3px 5px;
+  cursor: pointer; color: var(--gedimmt); }
+.knopf-mini:hover:not([disabled]) { border-color: var(--akzent); color: var(--akzent); }
+.knopf-mini[disabled] { opacity: .3; cursor: default; }
+.entfernen-pos { margin-top: 22px; font-size: .8rem; padding: 6px 7px; }
+.entfernen-pos:hover { border-color: var(--gefahr) !important; color: var(--gefahr) !important; }
+.pos-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pos-text textarea { resize: none; overflow: hidden; font-size: .9rem; min-height: 34px; padding: 6px 10px; }
+.pos-bezeichnung { font-weight: 600; }
+.pos-herkunft { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; min-height: 18px; font-size: .82rem; }
+.uebernehmen { display: inline-flex; gap: 6px; align-items: center; color: #6b5a2c; cursor: pointer; }
+.uebernehmen input { width: auto; accent-color: var(--akzent); }
+.pos-feld { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pos-feld > span { font-size: .75rem; font-weight: 600; color: var(--gedimmt); }
+.pos-feld input { text-align: right; }
+.pos-feld.versteckt { visibility: hidden; }
+.pos-summe { text-align: right; }
+.pos-betrag { font-size: 1.02rem; padding-top: 7px; font-variant-numeric: tabular-nums; }
+.pos-zweitbetrag { font-size: .75rem; font-variant-numeric: tabular-nums; }
+input.fehlerhaft, select.fehlerhaft { border-color: var(--gefahr); background: #fff8f7; }
+
+.pos-aktionen { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+.auswahl { position: relative; flex: 1 1 320px; }
+.auswahl-liste { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20; margin: 0; padding: 4px; list-style: none;
+  background: #fff; border: 1px solid var(--linie); border-radius: var(--radius); box-shadow: 0 10px 28px rgba(0,0,0,.12);
+  max-height: 320px; overflow-y: auto; }
+.auswahl-liste li { display: grid; grid-template-columns: 64px 1fr auto; gap: 10px; align-items: baseline; padding: 8px 10px;
+  border-radius: 6px; cursor: pointer; }
+.auswahl-liste li.aktiv, .auswahl-liste li[data-i]:hover { background: var(--akzent-hell); }
+.auswahl-liste li.keine { display: block; color: var(--gedimmt); cursor: default; }
+.auswahl-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.auswahl-preis { font-variant-numeric: tabular-nums; color: var(--gedimmt); font-size: .88rem; white-space: nowrap; }
+
+.summenblock { margin: 16px 0 0 auto; max-width: 420px; display: flex; flex-direction: column; gap: 4px; font-variant-numeric: tabular-nums; }
+.summenblock > div { display: flex; justify-content: space-between; gap: 16px; padding: 2px 10px; }
+.summenblock > div > span:first-child { color: var(--gedimmt); }
+.summenblock .summe-gesamt { background: var(--akzent-hell); border-radius: 6px; padding: 8px 10px; font-weight: 700; font-size: 1.1rem; }
+.summenblock .summe-gesamt > span:first-child { color: var(--text); }
+.optionen label > span { font-weight: 400; }
+.tabelle.positionen td { vertical-align: top; }
+
 @media (max-width: 760px) {
   .spalten { grid-template-columns: 1fr; }
   .raster > .feld { grid-column: span 12; }
   .kopf-innen { gap: 16px; }
   .marke span { display: none; }
+  .pos-zeile { grid-template-columns: 1fr 1fr; }
+  .pos-nr { grid-column: 1 / -1; flex-direction: row; padding-top: 0; justify-content: space-between; }
+  .pos-schieben { flex-direction: row; }
+  .pos-text { grid-column: 1 / -1; }
+  .pos-summe { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: baseline; }
+  .pos-feld.versteckt { display: none; }
+  .entfernen-pos { grid-column: 1 / -1; margin-top: 0; justify-self: end; }
+  .tabelle.angebote th:nth-child(2), .tabelle.angebote td:nth-child(2),
+  .tabelle.angebote th:nth-child(4), .tabelle.angebote td:nth-child(4),
+  .tabelle.angebote th:nth-child(5), .tabelle.angebote td:nth-child(5) { display: none; }
   .artwahl, .verwaltung { grid-template-columns: 1fr; }
   .kennzahlen { grid-template-columns: repeat(2, 1fr); }
   .tabelle.leistungen th:nth-child(3), .tabelle.leistungen td:nth-child(3),

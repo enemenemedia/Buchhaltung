@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block titel %}{{ 'Angebot ' ~ angebot.nummer if angebot else 'Neues Angebot' }} – X-Rechnung für KMU{% endblock %}
+
+{% macro fehlertext(name) -%}
+  {% if fehler.get(name) %}<small class="fehlertext">{{ fehler[name] }}</small>{% endif %}
+{%- endmacro %}
+
+{% macro pos_zeile(i, p) -%}
+  {% set frei = not p.get('leistung_id') %}
+  {% set f = 'pos-' ~ i ~ '-' %}
+  <div class="pos-zeile {% if frei %}frei{% endif %}" data-index="{{ i }}">
+    <input type="hidden" name="{{ f }}leistung_id" value="{{ p.get('leistung_id', '') }}">
+    <input type="hidden" name="{{ f }}leistungsnummer" value="{{ p.get('leistungsnummer', '') }}">
+    <div class="pos-nr"><span class="pos-zaehler"></span>
+      <div class="pos-schieben">
+        <button type="button" class="knopf-mini hoch" aria-label="Nach oben">▲</button>
+        <button type="button" class="knopf-mini runter" aria-label="Nach unten">▼</button>
+      </div>
+    </div>
+    <div class="pos-text">
+      <div class="pos-herkunft">
+        {% if frei %}<span class="marke-status warn">freie Position</span>
+          <label class="uebernehmen"><input type="checkbox" name="{{ f }}uebernehmen" value="1"
+            {% if p.get('uebernehmen', true) %}checked{% endif %}> ins Leistungsverzeichnis übernehmen</label>
+        {% else %}<span class="marke-status aktiv mono">{{ p.get('leistungsnummer') or 'Leistung' }}</span>{% endif %}
+      </div>
+      <input name="{{ f }}bezeichnung" value="{{ p.get('bezeichnung', '') }}" placeholder="Bezeichnung der Leistung"
+             aria-label="Bezeichnung" class="pos-bezeichnung {% if fehler.get(f ~ 'bezeichnung') %}fehlerhaft{% endif %}">
+      {{ fehlertext(f ~ 'bezeichnung') }}
+      <textarea name="{{ f }}beschreibung" rows="1" placeholder="Beschreibung (optional)" aria-label="Beschreibung">{{ p.get('beschreibung', '') }}</textarea>
+    </div>
+    <label class="pos-feld"><span>Menge</span>
+      <input name="{{ f }}menge" value="{{ p.get('menge', '1') }}"
+             inputmode="decimal" class="pos-menge {% if fehler.get(f ~ 'menge') %}fehlerhaft{% endif %}">
+      {{ fehlertext(f ~ 'menge') }}</label>
+    <label class="pos-feld"><span>Einheit</span>
+      <select name="{{ f }}einheit_code" class="pos-einheit {% if fehler.get(f ~ 'einheit_code') %}fehlerhaft{% endif %}">
+        {% for art, liste in einheiten.items() %}
+          <optgroup label="{{ {'zeit': 'Zeit', 'stueck': 'Stück', 'pauschal': 'Pauschal'}[art] }}">
+          {% for e in liste %}<option value="{{ e.code }}" data-mehrzahl="{{ e.mehrzahl }}" {% if p.get('einheit_code', 'HUR') == e.code %}selected{% endif %}>{{ e.name }}</option>{% endfor %}
+          </optgroup>
+        {% endfor %}
+      </select></label>
+    <label class="pos-feld"><span>Einzelpreis netto</span>
+      <input name="{{ f }}einzelpreis" value="{{ p.get('einzelpreis', '') }}"
+             inputmode="decimal" placeholder="0,00" class="pos-preis {% if fehler.get(f ~ 'einzelpreis') %}fehlerhaft{% endif %}">
+      {{ fehlertext(f ~ 'einzelpreis') }}</label>
+    <label class="pos-feld {% if kleinunternehmer %}versteckt{% endif %}"><span>USt</span>
+      <select name="{{ f }}ust_satz" class="pos-ust">
+        {% for s in UST_SAETZE %}<option value="{{ s }}" {% if p.get('ust_satz', '19')|string == s %}selected{% endif %}>{{ s }} %</option>{% endfor %}
+      </select></label>
+    <div class="pos-feld pos-summe"><span class="pos-summe-titel">{{ 'Gesamt' if preisausweis == 'brutto' else 'Gesamt netto' }}</span>
+      <strong class="pos-betrag">–</strong>
+      <small class="gedimmt pos-zweitbetrag"></small></div>
+    <button type="button" class="knopf-mini entfernen-pos" aria-label="Position entfernen" title="Position entfernen">✕</button>
+  </div>
+{%- endmacro %}
+
+{% block inhalt %}
+<p class="brotkrumen"><a href="{{ url_for('angebote.detail', angebot_id=angebot.id) if angebot else url_for('angebote.liste') }}">← {{ 'Angebot ' ~ angebot.nummer if angebot else 'Angebote' }}</a></p>
+<div class="seitenkopf">
+  <h1>{% if angebot %}Angebot {{ angebot.nummer }} bearbeiten{% else %}Neues Angebot{% endif %}</h1>
+</div>
+
+{% if not kunden %}
+<div class="hinweisbox">Es gibt noch keine aktiven Kunden. <a href="{{ url_for('kunden.neu') }}">Zuerst einen Kunden anlegen</a>.</div>
+{% endif %}
+
+<form method="post" class="formular" novalidate id="angebot-form"
+      data-ausweis="{{ preisausweis }}" data-klein="{{ '1' if kleinunternehmer else '0' }}">
+  <section class="karte">
+    <h2>Kunde &amp; Angebotsdaten</h2>
+    <div class="raster">
+      <label class="feld s6 {% if fehler.get('kunde_id') %}hat-fehler{% endif %}"><span>Kunde <em>*</em></span>
+        <select name="kunde_id" id="kunde" required>
+          <option value="">– Kunde wählen –</option>
+          {% for k in kunden %}
+            <option value="{{ k.id }}" {% if daten.get('kunde_id')|string == k.id|string %}selected{% endif %}>{{ k.firma }} · {{ k.nummer }}{% if k.ort %} · {{ k.ort }}{% endif %}</option>
+          {% endfor %}
+        </select>
+        {{ fehlertext('kunde_id') }}</label>
+      <label class="feld s6 {% if fehler.get('ansprechpartner_id') %}hat-fehler{% endif %}"><span>Ansprechpartner beim Kunden</span>
+        <select name="ansprechpartner_id" id="ansprechpartner" data-wert="{{ daten.get('ansprechpartner_id', '') }}">
+          <option value="">– ohne –</option>
+        </select>
+        {{ fehlertext('ansprechpartner_id') }}</label>
+      <label class="feld s3 {% if fehler.get('datum') %}hat-fehler{% endif %}"><span>Angebotsdatum <em>*</em></span>
+        <input type="date" name="datum" id="datum" value="{{ daten.get('datum', '') }}" required>
+        {{ fehlertext('datum') }}</label>
+      <label class="feld s3 {% if fehler.get('gueltig_bis') %}hat-fehler{% endif %}"><span>Gültig bis <em>*</em></span>
+        <input type="date" name="gueltig_bis" id="gueltig" value="{{ daten.get('gueltig_bis', '') }}" required>
+        {% if fehler.get('gueltig_bis') %}{{ fehlertext('gueltig_bis') }}{% else %}
+        <small class="schnellwahl">Laufzeit: {% for t in (14, 30, 60, 90) %}<button type="button" class="knopf-link" data-tage="{{ t }}">{{ t }} Tage</button>{% endfor %}</small>{% endif %}</label>
+      <label class="feld s6"><span>Betreff</span>
+        <input name="betreff" value="{{ daten.get('betreff', '') }}" maxlength="200" placeholder="z. B. Relaunch der Website">
+        {{ fehlertext('betreff') }}</label>
+    </div>
+  </section>
+
+  <section class="karte">
+    <div class="karte-kopf">
+      <h2>Leistungen</h2>
+      <span class="gedimmt klein">{% if kleinunternehmer %}Kleinunternehmer: Gesamtpreise ohne USt{% elif preisausweis == 'brutto' %}Ausweis als Gesamtpreise inkl. USt{% else %}Ausweis als Nettopreise zzgl. USt{% endif %}
+        · <a href="{{ url_for('stammdaten.seite') }}#preisausweis">ändern</a></span>
+    </div>
+    {% if fehler.get('positionen') %}<p class="fehlertext">{{ fehler['positionen'] }}</p>{% endif %}
+
+    <div id="pos-liste">
+      {% for p in positionen %}
+        {{ pos_zeile(p.index if p.index is defined else loop.index0, p) }}
+      {% endfor %}
+    </div>
+    <p class="leer-klein" id="pos-leer" {% if positionen %}hidden{% endif %}>Noch keine Leistungen. Wählen Sie eine aus der Liste oder geben Sie eine neue ein.</p>
+
+    <div class="pos-aktionen">
+      <div class="auswahl" id="auswahl">
+        <input type="search" id="auswahl-suche" placeholder="Leistung aus der Liste suchen und hinzufügen …" autocomplete="off"
+               aria-label="Leistung suchen" aria-controls="auswahl-liste" {% if not leistungsliste %}disabled{% endif %}>
+        <ul class="auswahl-liste" id="auswahl-liste" role="listbox" hidden></ul>
+      </div>
+      <button type="button" class="knopf" id="frei-hinzufuegen">+ Neue Leistung eingeben</button>
+    </div>
+    {% if not leistungsliste %}<p class="gedimmt klein">Das Leistungsverzeichnis ist noch leer. Neue Leistungen, die Sie hier eingeben, werden automatisch übernommen.</p>{% endif %}
+
+    <div class="summenblock" id="summen" aria-live="polite"></div>
+    <template id="pos-vorlage">{{ pos_zeile('__I__', {'uebernehmen': true}) }}</template>
+  </section>
+
+  <section class="karte">
+    <h2>Anmerkungen &amp; Hinweise</h2>
+    <label class="feld s12 {% if fehler.get('anmerkungen') %}hat-fehler{% endif %}"><span class="sr-only">Anmerkungen</span>
+      <textarea name="anmerkungen" rows="4" maxlength="5000"
+        placeholder="z. B. Hinweise zum Ablauf, Voraussetzungen, nicht enthaltene Leistungen, Zahlungsbedingungen …">{{ daten.get('anmerkungen', '') }}</textarea>
+      {% if fehler.get('anmerkungen') %}{{ fehlertext('anmerkungen') }}{% else %}<small>Erscheint im Angebot unter den Leistungen.</small>{% endif %}</label>
+  </section>
+
+  <div class="aktionen">
+    <a class="knopf" href="{{ url_for('angebote.detail', angebot_id=angebot.id) if angebot else url_for('angebote.liste') }}">Abbrechen</a>
+    <button class="knopf knopf-primaer" type="submit">Entwurf speichern</button>
+  </div>
+</form>
+
+<script type="application/json" id="kunden-daten">{{ kunden|tojson }}</script>
+<script type="application/json" id="leistungen-daten">{{ leistungsliste|tojson }}</script>
+{% endblock %}
+
+{% block skripte %}
+<script src="{{ url_for('static', filename='angebote.js') }}"></script>
+{% endblock %}

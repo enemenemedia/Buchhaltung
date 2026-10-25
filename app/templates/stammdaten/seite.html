@@ -147,6 +147,22 @@
     </div>
   </section>
 
+  <section class="karte" id="preisausweis">
+    <h2>Angebote</h2>
+    <fieldset class="optionen {% if fehler.get('preisausweis') %}hat-fehler{% endif %}">
+      <legend>Preise in Angeboten ausweisen als</legend>
+      <label><input type="radio" name="preisausweis" value="netto" {% if daten.get('preisausweis', 'netto') == 'netto' %}checked{% endif %}>
+        <span><strong>Nettopreise</strong> zzgl. USt <span class="gedimmt">– üblich für Geschäftskunden</span></span></label>
+      <label><input type="radio" name="preisausweis" value="brutto" {% if daten.get('preisausweis') == 'brutto' %}checked{% endif %}>
+        <span><strong>Gesamtpreise</strong> inkl. USt <span class="gedimmt">– üblich für Privatkunden</span></span></label>
+    </fieldset>
+    {% if daten.get('kleinunternehmer') %}<p class="hinweis">Als Kleinunternehmer werden immer Gesamtpreise ohne Umsatzsteuer ausgewiesen.</p>{% endif %}
+    <div class="raster">
+      {{ feld('angebot_gueltigkeit_tage', 'Gültigkeit neuer Angebote in Tagen', 'number', breite='s4',
+              hilfe='Vorgabe für das Ablaufdatum', attrs='min="1" max="365" inputmode="numeric"') }}
+    </div>
+  </section>
+
   <div class="aktionen">
     <a class="knopf" href="{{ url_for('stammdaten.seite') }}">Verwerfen</a>
     <button class="knopf knopf-primaer" type="submit">Stammdaten speichern</button>

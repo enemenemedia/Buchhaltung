@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% from "_protokoll.html" import protokoll_liste %}
+{% block titel %}Angebot {{ a.nummer }} – X-Rechnung für KMU{% endblock %}
+
+{% set st = angebot_status(a) %}
+{% set netto_ausweis = a.preisausweis == 'netto' and not a.kleinunternehmer %}
+
+{% block inhalt %}
+<p class="brotkrumen"><a href="{{ url_for('angebote.liste') }}">← Angebote</a></p>
+
+<div class="seitenkopf">
+  <div>
+    <h1>Angebot {{ a.nummer }} <span class="status status-{{ st }} gross">{{ ANGEBOT_STATUS[st] }}</span></h1>
+    <p class="untertitel">
+      für <a href="{{ url_for('kunden.detail', kunde_id=a.kunde_id) }}">{{ a.kunde_firma }}</a> <span class="mono">{{ a.kundennummer }}</span>
+      {% if a.betreff %} · {{ a.betreff }}{% endif %}</p>
+  </div>
+  <div class="knopfgruppe umbruch-erlaubt">
+    {% if a.status == 'entwurf' %}
+      <a class="knopf" href="{{ url_for('angebote.pdf', angebot_id=a.id) }}" target="_blank" rel="noopener">PDF-Vorschau</a>
+      <a class="knopf" href="{{ url_for('angebote.bearbeiten', angebot_id=a.id) }}">Bearbeiten</a>
+      <form method="post" action="{{ url_for('angebote.abschliessen', angebot_id=a.id) }}"
+            onsubmit="return confirm('Angebot abschließen? Das PDF wird erstellt und im Kundenordner abgelegt. Danach kann das Angebot nicht mehr geändert werden.')">
+        <button class="knopf knopf-primaer" type="submit">Abschließen &amp; PDF erstellen</button>
+      </form>
+    {% else %}
+      <a class="knopf knopf-primaer" href="{{ url_for('angebote.pdf', angebot_id=a.id) }}" target="_blank" rel="noopener">PDF öffnen</a>
+      {% if a.status == 'offen' %}
+        <form method="post" action="{{ url_for('angebote.status', angebot_id=a.id) }}"><input type="hidden" name="status" value="angenommen">
+          <button class="knopf" type="submit">✓ Angenommen</button></form>
+        <form method="post" action="{{ url_for('angebote.status', angebot_id=a.id) }}"><input type="hidden" name="status" value="abgelehnt">
+          <button class="knopf" type="submit">✕ Abgelehnt</button></form>
+      {% else %}
+        <form method="post" action="{{ url_for('angebote.status', angebot_id=a.id) }}"><input type="hidden" name="status" value="offen">
+          <button class="knopf" type="submit">Wieder auf „offen“</button></form>
+      {% endif %}
+    {% endif %}
+    <form method="post" action="{{ url_for('angebote.kopie', angebot_id=a.id) }}">
+      <button class="knopf" type="submit" {% if a.kunde_archiviert %}disabled title="Kunde ist archiviert"{% endif %}>Kopie anlegen</button>
+    </form>
+  </div>
+</div>
+
+{% if st == 'abgelaufen' %}
+<div class="hinweisbox">Dieses Angebot ist am {{ a.gueltig_bis|datum }} abgelaufen.
+  {% if a.status == 'offen' %}Sie können es trotzdem als angenommen markieren oder eine Kopie mit neuem Datum anlegen.{% endif %}</div>
+{% elif a.status == 'entwurf' %}
+<div class="hinweisbox">Entwurf – noch nicht abgeschlossen. Sie können das Angebot bearbeiten und als PDF-Vorschau ansehen.
+  Mit „Abschließen“ wird das endgültige PDF im Kundenordner abgelegt.</div>
+{% endif %}
+
+<div class="spalten">
+  <section class="karte">
+    <h2>Empfänger</h2>
+    <p class="anschrift">{{ a.empfaenger }}</p>
+  </section>
+  <section class="karte">
+    <h2>Angebotsdaten</h2>
+    <dl class="angaben">
+      <dt>Nummer</dt><dd class="mono">{{ a.nummer }}</dd>
+      <dt>Datum</dt><dd>{{ a.datum|datum }}</dd>
+      <dt>Gültig bis</dt><dd>{{ a.gueltig_bis|datum }}
+        {% if a.status in ('entwurf', 'offen') %}{% set t = angebot_tage(a) %}
+          <span class="gedimmt">({% if t > 1 %}noch {{ t }} Tage{% elif t == 1 %}noch 1 Tag{% elif t == 0 %}läuft heute ab{% else %}seit {{ -t }} Tag{{ 'en' if -t != 1 }} abgelaufen{% endif %})</span>
+        {% endif %}</dd>
+      <dt>Preisausweis</dt><dd>{% if a.kleinunternehmer %}Gesamtpreise ohne USt (§ 19 UStG){% elif a.preisausweis == 'brutto' %}Gesamtpreise inkl. USt{% else %}Nettopreise zzgl. USt{% endif %}</dd>
+      {% if pdf_pfad %}<dt>Ablage</dt><dd class="mono klein umbruch">{{ a.pdf_datei }}</dd>{% endif %}
+    </dl>
+  </section>
+</div>
+
+<section class="karte abstand-oben">
+  <h2>Leistungen</h2>
+  <div class="tabelle-rahmen">
+  <table class="tabelle positionen">
+    <thead><tr>
+      <th>Pos.</th><th>Leistung</th><th class="rechts">Menge</th>
+      <th class="rechts">{{ 'Einzelpreis netto' if netto_ausweis else 'Einzelpreis' }}</th>
+      {% if not a.kleinunternehmer %}<th class="rechts">USt</th>{% endif %}
+      <th class="rechts">{{ 'Gesamt netto' if netto_ausweis else 'Gesamt' }}</th>
+    </tr></thead>
+    <tbody>
+    {% for p in positionen %}{% set z = summen.zeilen[loop.index0] %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td class="umbruch-zelle"><strong>{{ p.bezeichnung }}</strong>
+          {% if p.beschreibung %}<div class="gedimmt klein umbruch">{{ p.beschreibung }}</div>{% endif %}
+          {% if p.leistungsnummer %}<div class="gedimmt klein">
+            {% if p.leistung_id %}<a href="{{ url_for('leistungen.bearbeiten', leistung_id=p.leistung_id) }}" class="mono">{{ p.leistungsnummer }}</a>
+            {% else %}<span class="mono">{{ p.leistungsnummer }}</span>{% endif %}</div>{% endif %}</td>
+        <td class="rechts">{{ p.menge|menge }} {{ einheit_name(p.einheit_code, p.menge) }}</td>
+        <td class="rechts">{{ z.einzelpreis(a.preisausweis)|geld }}</td>
+        {% if not a.kleinunternehmer %}<td class="rechts">{{ p.ust_satz }} %</td>{% endif %}
+        <td class="rechts zahl-fett">{{ z.betrag(a.preisausweis)|geld }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <div class="summenblock">
+    {% if a.kleinunternehmer %}
+      <div class="summe-gesamt"><span>Gesamtbetrag</span><span>{{ summen.gesamt|geld }}</span></div>
+      <div><span>Gemäß § 19 UStG ohne Umsatzsteuer</span><span></span></div>
+    {% elif a.preisausweis == 'brutto' %}
+      <div class="summe-gesamt"><span>Gesamtbetrag</span><span>{{ summen.gesamt|geld }}</span></div>
+      <div><span>Nettobetrag</span><span>{{ summen.netto|geld }}</span></div>
+      {% for g in summen.steuergruppen if g.satz %}<div><span>enthaltene USt {{ g.satz|menge }} %</span><span>{{ g.betrag|geld }}</span></div>{% endfor %}
+    {% else %}
+      <div><span>Summe netto</span><span>{{ summen.netto|geld }}</span></div>
+      {% for g in summen.steuergruppen %}<div><span>zzgl. {{ g.satz|menge }} % USt auf {{ g.basis|geld }}</span><span>{{ g.betrag|geld }}</span></div>{% endfor %}
+      <div class="summe-gesamt"><span>Gesamtbetrag</span><span>{{ summen.gesamt|geld }}</span></div>
+    {% endif %}
+  </div>
+</section>
+
+{% if a.anmerkungen %}
+<section class="karte">
+  <h2>Anmerkungen &amp; Hinweise</h2>
+  <p class="umbruch">{{ a.anmerkungen }}</p>
+</section>
+{% endif %}
+
+<section class="karte">
+  <h2>Verlauf</h2>
+  {{ protokoll_liste(verlauf) }}
+</section>
+
+{% if a.status == 'entwurf' %}
+<section class="karte gefahr">
+  <h2>Entwurf löschen</h2>
+  <p class="gedimmt">Nur Entwürfe können gelöscht werden. Abgeschlossene Angebote bleiben zur Nachvollziehbarkeit erhalten.</p>
+  <form method="post" action="{{ url_for('angebote.loeschen', angebot_id=a.id) }}"
+        onsubmit="return confirm('Entwurf {{ a.nummer }} löschen?')">
+    <button class="knopf knopf-gefahr-rand" type="submit">Entwurf löschen</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

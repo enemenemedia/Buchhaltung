@@ -40,7 +40,11 @@ BEZEICHNUNG = {
     "kleinunternehmer": "Kleinunternehmer (§ 19 UStG)",
     "kontoinhaber": "Kontoinhaber", "iban": "IBAN", "bic": "BIC", "bank": "Bank",
     "zahlungsziel_tage": "Zahlungsziel (Tage)",
+    "preisausweis": "Preisausweis in Angeboten",
+    "angebot_gueltigkeit_tage": "Gültigkeit von Angeboten (Tage)",
 }
+
+PREISAUSWEIS = {"netto": "Nettopreise zzgl. USt", "brutto": "Gesamtpreise inkl. USt"}
 
 # Logo
 LOGO_MAX_BYTES = 5 * 1024 * 1024
@@ -149,6 +153,9 @@ def aus_formular(form) -> dict:
     daten["kleinunternehmer"] = 1 if form.get("kleinunternehmer") else 0
     roh = (form.get("zahlungsziel_tage") or "").strip()
     daten["zahlungsziel_tage"] = int(roh) if roh.isdigit() else roh
+    daten["preisausweis"] = form.get("preisausweis") or "netto"
+    roh = (form.get("angebot_gueltigkeit_tage") or "").strip() or "30"
+    daten["angebot_gueltigkeit_tage"] = int(roh) if roh.isdigit() else roh
     return daten
 
 
@@ -176,6 +183,10 @@ def pruefen(d: dict) -> dict[str, str]:
         f["bic"] = "Die BIC hat 8 oder 11 Zeichen."
     if not isinstance(d["zahlungsziel_tage"], int) or not 0 <= d["zahlungsziel_tage"] <= 365:
         f["zahlungsziel_tage"] = "Bitte eine Zahl zwischen 0 und 365 angeben."
+    if d["preisausweis"] not in PREISAUSWEIS:
+        f["preisausweis"] = "Bitte Netto- oder Gesamtpreise wählen."
+    if not isinstance(d["angebot_gueltigkeit_tage"], int) or not 1 <= d["angebot_gueltigkeit_tage"] <= 365:
+        f["angebot_gueltigkeit_tage"] = "Bitte eine Zahl zwischen 1 und 365 angeben."
     if d["website"] and not re.match(r"^(https?://)?[^\s/]+\.[^\s]+$", d["website"]):
         f["website"] = "Die Website-Adresse ist ungültig."
     return f
@@ -195,9 +206,11 @@ def speichern(con: sqlite3.Connection, form) -> bool:
     # Bool-Werte im Protokoll lesbar darstellen
     if BEZEICHNUNG["kleinunternehmer"] in diff:
         diff[BEZEICHNUNG["kleinunternehmer"]] = ["ja" if v else "nein" for v in diff[BEZEICHNUNG["kleinunternehmer"]]]
+    if BEZEICHNUNG["preisausweis"] in diff:
+        diff[BEZEICHNUNG["preisausweis"]] = [PREISAUSWEIS.get(v, v) for v in diff[BEZEICHNUNG["preisausweis"]]]
 
     erstmalig = not alt["geaendert_am"]
-    spalten = (*TEXTFELDER, "kleinunternehmer", "zahlungsziel_tage")
+    spalten = (*TEXTFELDER, "kleinunternehmer", "zahlungsziel_tage", "preisausweis", "angebot_gueltigkeit_tage")
     with con:
         con.execute(
             f"UPDATE stammdaten SET {', '.join(s + ' = ?' for s in spalten)}, geaendert_am = ? WHERE id = 1",

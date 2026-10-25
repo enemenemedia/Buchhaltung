@@ -80,6 +80,11 @@ CREATE TABLE IF NOT EXISTS stammdaten (
     bic                     TEXT    NOT NULL DEFAULT '',
     bank                    TEXT    NOT NULL DEFAULT '',
     zahlungsziel_tage       INTEGER NOT NULL DEFAULT 14,
+    -- Preisausweis in Angeboten: 'netto' (zzgl. USt, Geschäftskunden) oder
+    -- 'brutto' (Gesamtpreise inkl. USt, Privatkunden). Bei Kleinunternehmern
+    -- werden immer Gesamtpreise ohne USt ausgewiesen.
+    preisausweis            TEXT    NOT NULL DEFAULT 'netto' CHECK (preisausweis IN ('netto', 'brutto')),
+    angebot_gueltigkeit_tage INTEGER NOT NULL DEFAULT 30,
     logo_aktualisiert_am    TEXT,
     geaendert_am            TEXT
 );
@@ -129,6 +134,106 @@ CREATE TABLE IF NOT EXISTS ansprechpartner (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ansprechpartner_kunde ON ansprechpartner (kunde_id);
+
+-- Angebote --------------------------------------------------------------
+-- status: 'entwurf' (bearbeitbar) -> 'offen' (abgeschlossen, PDF erstellt)
+--         -> 'angenommen' | 'abgelehnt'. „Abgelaufen“ ergibt sich aus gueltig_bis.
+-- Empfänger, Preisausweis und Positionen werden als Kopie gespeichert, damit ein
+-- abgeschlossenes Angebot unverändert bleibt, auch wenn sich Kunden-, Stamm- oder
+-- Leistungsdaten später ändern.
+CREATE TABLE IF NOT EXISTS angebote (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    nummer              TEXT    NOT NULL UNIQUE,
+    kunde_id            INTEGER NOT NULL REFERENCES kunden (id) ON DELETE CASCADE,
+    ansprechpartner_id  INTEGER REFERENCES ansprechpartner (id) ON DELETE SET NULL,
+    status              TEXT    NOT NULL DEFAULT 'entwurf'
+                        CHECK (status IN ('entwurf', 'offen', 'angenommen', 'abgelehnt')),
+    datum               TEXT    NOT NULL,
+    gueltig_bis         TEXT    NOT NULL,
+    betreff             TEXT    NOT NULL DEFAULT '',
+    anmerkungen         TEXT    NOT NULL DEFAULT '',
+    preisausweis        TEXT    NOT NULL DEFAULT 'netto' CHECK (preisausweis IN ('netto', 'brutto')),
+    kleinunternehmer    INTEGER NOT NULL DEFAULT 0,
+    empfaenger          TEXT    NOT NULL DEFAULT '',   -- Anschriftblock (mehrzeilig)
+    summe_netto         TEXT    NOT NULL DEFAULT '0',
+    summe_ust           TEXT    NOT NULL DEFAULT '0',
+    summe_gesamt        TEXT    NOT NULL DEFAULT '0',
+    pdf_datei           TEXT,                          -- relativ zum Datenverzeichnis
+    abgeschlossen_am    TEXT,
+    erstellt_am         TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
+    geaendert_am        TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
+    CHECK (gueltig_bis >= datum)
+);
+
+CREATE INDEX IF NOT EXISTS idx_angebote_kunde ON angebote (kunde_id);
+
+CREATE TABLE IF NOT EXISTS angebot_positionen (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    angebot_id      INTEGER NOT NULL REFERENCES angebote (id) ON DELETE CASCADE,
+    position        INTEGER NOT NULL,
+    leistung_id     INTEGER REFERENCES leistungen (id) ON DELETE SET NULL,
+    leistungsnummer TEXT    NOT NULL DEFAULT '',
+    bezeichnung     TEXT    NOT NULL,
+    beschreibung    TEXT    NOT NULL DEFAULT '',
+    einheit_code    TEXT    NOT NULL,
+    menge           TEXT    NOT NULL,
+    einzelpreis     TEXT    NOT NULL,                  -- netto je Einheit
+    ust_satz        TEXT    NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_angebot_positionen ON angebot_positionen (angebot_id, position);
+
+-- Abgeschlossene Angebote sind unveränderlich: nur Status-Übergänge sind erlaubt.
+CREATE TRIGGER IF NOT EXISTS angebote_schreibschutz
+BEFORE UPDATE ON angebote
+FOR EACH ROW
+WHEN OLD.status <> 'entwurf' AND (
+       NEW.nummer IS NOT OLD.nummer OR NEW.kunde_id IS NOT OLD.kunde_id
+    OR NEW.datum IS NOT OLD.datum OR NEW.gueltig_bis IS NOT OLD.gueltig_bis
+    OR NEW.betreff IS NOT OLD.betreff OR NEW.anmerkungen IS NOT OLD.anmerkungen
+    OR NEW.preisausweis IS NOT OLD.preisausweis OR NEW.kleinunternehmer IS NOT OLD.kleinunternehmer
+    OR NEW.empfaenger IS NOT OLD.empfaenger OR NEW.summe_gesamt IS NOT OLD.summe_gesamt
+    OR NEW.summe_netto IS NOT OLD.summe_netto OR NEW.summe_ust IS NOT OLD.summe_ust
+    OR NEW.pdf_datei IS NOT OLD.pdf_datei OR NEW.status = 'entwurf')
+BEGIN
+    SELECT RAISE(ABORT, 'Abgeschlossene Angebote können nicht geändert werden.');
+END;
+
+-- Abgeschlossene Angebote dürfen nur zusammen mit dem Kunden (nach Ablauf
+-- der Aufbewahrungsfrist) gelöscht werden. Beim kaskadierenden Löschen ist
+-- der Kunde bereits entfernt, daher greift die Sperre dann nicht.
+CREATE TRIGGER IF NOT EXISTS angebote_loeschschutz
+BEFORE DELETE ON angebote
+FOR EACH ROW
+WHEN OLD.status <> 'entwurf' AND EXISTS (SELECT 1 FROM kunden WHERE id = OLD.kunde_id)
+BEGIN
+    SELECT RAISE(ABORT, 'Abgeschlossene Angebote können nicht gelöscht werden.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS angebot_positionen_schutz_insert
+BEFORE INSERT ON angebot_positionen
+FOR EACH ROW
+WHEN (SELECT status FROM angebote WHERE id = NEW.angebot_id) <> 'entwurf'
+BEGIN
+    SELECT RAISE(ABORT, 'Abgeschlossene Angebote können nicht geändert werden.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS angebot_positionen_schutz_update
+BEFORE UPDATE ON angebot_positionen
+FOR EACH ROW
+WHEN (SELECT status FROM angebote WHERE id = OLD.angebot_id) <> 'entwurf'
+BEGIN
+    SELECT RAISE(ABORT, 'Abgeschlossene Angebote können nicht geändert werden.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS angebot_positionen_schutz_delete
+BEFORE DELETE ON angebot_positionen
+FOR EACH ROW
+WHEN (SELECT status FROM angebote WHERE id = OLD.angebot_id) <> 'entwurf'
+BEGIN
+    SELECT RAISE(ABORT, 'Abgeschlossene Angebote können nicht geändert werden.');
+END;
+
 
 -- Änderungsprotokoll ----------------------------------------------------
 -- Allgemeine Tabelle, die auch von späteren Modulen (z. B. Leistungs-
