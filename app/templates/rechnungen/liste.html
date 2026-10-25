@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block titel %}Rechnungen – X-Rechnung für KMU{% endblock %}
+{% block inhalt %}
+<div class="seitenkopf">
+  <h1>Rechnungen</h1>
+  <div class="knopfgruppe umbruch-erlaubt">
+    <a class="knopf" href="{{ url_for('rechnungen.neu', neukunde=1) }}">Rechnung an neuen Kunden</a>
+    <a class="knopf knopf-primaer" href="{{ url_for('rechnungen.neu') }}">+ Neue Rechnung</a>
+  </div>
+</div>
+
+<div class="kennzahlen kennzahlen-2">
+  <div><strong>{{ kennzahlen.offen|geld }}</strong><span>offen insgesamt</span></div>
+  <div class="{% if kennzahlen.ueberfaellig > 0 %}rot{% endif %}"><strong>{{ kennzahlen.ueberfaellig|geld }}</strong><span>davon überfällig</span></div>
+</div>
+
+<form class="filterleiste" method="get">
+  <input type="search" name="q" value="{{ suche }}" placeholder="Rechnungsnummer, Betreff oder Kunde suchen" aria-label="Suche">
+  <select name="status" aria-label="Status" onchange="this.form.submit()" class="schmal">
+    <option value="">Alle Status</option>
+    {% for wert, text in RECHNUNG_STATUS.items() %}<option value="{{ wert }}" {% if status == wert %}selected{% endif %}>{{ text }}</option>{% endfor %}
+  </select>
+  <button class="knopf" type="submit">Suchen</button>
+</form>
+
+{% if rechnungen %}
+<div class="tabelle-rahmen">
+<table class="tabelle rechnungen">
+  <thead><tr><th>Nummer</th><th>Datum</th><th>Kunde</th><th>Betreff</th><th>Fällig</th><th class="rechts">Betrag</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for r in rechnungen %}{% set st = rechnung_status(r) %}
+    <tr class="klickbar" onclick="location.href='{{ url_for('rechnungen.detail', rechnung_id=r.id) }}'">
+      <td class="mono"><a href="{{ url_for('rechnungen.detail', rechnung_id=r.id) }}">{{ r.nummer or 'Entwurf #' ~ r.id }}</a></td>
+      <td>{{ r.rechnungsdatum|datum }}</td>
+      <td class="umbruch-zelle">{{ r.kunde_firma }} <span class="gedimmt klein mono">{{ r.kundennummer }}</span></td>
+      <td class="umbruch-zelle">{{ r.betreff or '–' }}</td>
+      <td>{{ r.faellig_am|datum }}</td>
+      <td class="rechts zahl-fett">{{ r.summe_gesamt|geld }}</td>
+      <td><span class="status status-{{ st }}">{{ RECHNUNG_STATUS[st] }}</span></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="leer">
+  {% if suche or status %}Keine Rechnungen zu diesem Filter. <a href="{{ url_for('rechnungen.liste') }}">Filter zurücksetzen</a>
+  {% else %}<p>Noch keine Rechnungen.</p>
+    <p class="gedimmt">Erstellen Sie eine Rechnung direkt, aus einem angenommenen Angebot oder für einen neuen Kunden.</p>
+    <p><a class="knopf knopf-primaer" href="{{ url_for('rechnungen.neu') }}">Erste Rechnung erstellen</a></p>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

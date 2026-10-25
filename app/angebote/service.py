@@ -16,6 +16,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from .. import berechnung, protokoll, zahlen
+from .. import positionen as pos
 from ..kunden import service as kunden
 from ..leistungen import service as leistungen
 from ..stammdaten import service as stammdaten
@@ -30,15 +31,13 @@ STATUS = {
     "abgelehnt": "Abgelehnt",
 }
 
-POSITIONSFELDER = ("leistung_id", "leistungsnummer", "bezeichnung", "beschreibung",
-                   "einheit_code", "menge", "einzelpreis", "ust_satz")
+POSITIONSFELDER = pos.FELDER
 
 KOPF_BEZEICHNUNG = {
     "kunde": "Kunde", "ansprechpartner": "Ansprechpartner", "datum": "Angebotsdatum",
     "gueltig_bis": "Gültig bis", "betreff": "Betreff", "anmerkungen": "Anmerkungen",
 }
 
-MAX_POSITIONEN = 200
 
 
 class AngebotsFehler(Exception):
@@ -81,10 +80,6 @@ def naechste_nummer(con: sqlite3.Connection, jahr: int) -> str:
             hoechste = max(hoechste, int(m.group(1)))
     return f"{praefix}{hoechste + 1:04d}"
 
-
-def ansprechpartner_name(ap) -> str:
-    teile = [ap["anrede"], ap["titel"], ap["vorname"], ap["nachname"]]
-    return " ".join(t for t in teile if t)
 
 
 def empfaenger_text(kunde, ap=None) -> str:
@@ -157,50 +152,11 @@ def verlauf(con: sqlite3.Connection, angebot_id: int) -> list[dict]:
     return protokoll.lesen(con, BEREICH, angebot_id)
 
 
-def kunden_auswahl(con: sqlite3.Connection) -> list[dict]:
-    """Aktive Kunden mit ihren Ansprechpartnern für das Formular."""
-    ergebnis = []
-    for k in kunden.liste(con, status="aktiv"):
-        ergebnis.append({
-            "id": k["id"], "nummer": k["kundennummer"], "firma": k["firma"],
-            "ort": f"{k['plz']} {k['ort']}".strip(),
-            "ansprechpartner": [{"id": a["id"], "name": ansprechpartner_name(a) or "(ohne Namen)",
-                                 "haupt": bool(a["ist_hauptkontakt"])}
-                                for a in kunden.ansprechpartner(con, k["id"])],
-        })
-    return ergebnis
-
-
-def leistungen_auswahl(con: sqlite3.Connection) -> list[dict]:
-    """Aktive Leistungen für die Auswahl im Formular."""
-    return [{
-        "id": l["id"], "nummer": l["nummer"], "bezeichnung": l["bezeichnung"],
-        "beschreibung": l["beschreibung"], "kategorie": l["kategorie"], "art": l["art"],
-        "einheit_code": l["einheit_code"], "einheit": leistungen.einheit_name(l["einheit_code"]),
-        "preis": l["preis"], "anzahl": l["anzahl"], "ust_satz": l["ust_satz"],
-    } for l in leistungen.liste(con, status="aktiv")]
 
 
 # ---------------------------------------------------------------------------
 # Formular einlesen & prüfen
 # ---------------------------------------------------------------------------
-
-def positionen_aus_formular(form) -> list[dict]:
-    """Liest Positionszeilen (Felder pos-<n>-<feld>) in der Reihenfolge des Formulars."""
-    indizes: list[int] = []
-    for schluessel in form.keys():
-        m = re.fullmatch(r"pos-(\d+)-bezeichnung", schluessel)
-        if m and int(m.group(1)) not in indizes:
-            indizes.append(int(m.group(1)))
-    zeilen = []
-    for i in indizes:
-        z = {f: (form.get(f"pos-{i}-{f}") or "").strip() for f in POSITIONSFELDER}
-        z["uebernehmen"] = bool(form.get(f"pos-{i}-uebernehmen"))
-        z["index"] = i
-        if not any(z[f] for f in ("bezeichnung", "beschreibung", "einzelpreis")):
-            continue  # leere Zeile
-        zeilen.append(z)
-    return zeilen
 
 
 @dataclass
@@ -258,36 +214,7 @@ def eingabe_pruefen(con: sqlite3.Connection, form) -> Eingabe:
     if len(kopf["anmerkungen"]) > 5000:
         fehler["anmerkungen"] = "Die Anmerkungen dürfen höchstens 5000 Zeichen haben."
 
-    pos_liste = positionen_aus_formular(form)
-    if not pos_liste:
-        fehler["positionen"] = "Bitte mindestens eine Leistung hinzufügen."
-    elif len(pos_liste) > MAX_POSITIONEN:
-        fehler["positionen"] = f"Höchstens {MAX_POSITIONEN} Positionen."
-
-    geprueft = []
-    for p in pos_liste:
-        i = p["index"]
-        art = leistungen.ART_NACH_CODE.get(p["einheit_code"], "")
-        daten, pf = leistungen.normalisieren({
-            "nummer": "", "bezeichnung": p["bezeichnung"], "beschreibung": p["beschreibung"],
-            "art": art, "einheit_code": p["einheit_code"], "preis": p["einzelpreis"],
-            "anzahl": p["menge"], "ust_satz": p["ust_satz"],
-        })
-        zuordnung = {"bezeichnung": "bezeichnung", "beschreibung": "beschreibung", "art": "einheit_code",
-                     "einheit_code": "einheit_code", "preis": "einzelpreis", "anzahl": "menge",
-                     "ust_satz": "ust_satz"}
-        for feld, meldung in pf.items():
-            if feld in zuordnung:
-                fehler.setdefault(f"pos-{i}-{zuordnung[feld]}", meldung.replace("Anzahl", "Menge"))
-        geprueft.append({
-            "index": i,
-            "leistung_id": int(p["leistung_id"]) if p["leistung_id"].isdigit() else None,
-            "leistungsnummer": p["leistungsnummer"][:30],
-            "bezeichnung": daten["bezeichnung"], "beschreibung": daten["beschreibung"],
-            "einheit_code": daten["einheit_code"] or p["einheit_code"],
-            "menge": daten["anzahl"], "einzelpreis": daten["preis"], "ust_satz": daten["ust_satz"],
-            "uebernehmen": p["uebernehmen"],
-        })
+    geprueft = pos.pruefen(form, fehler)
     return Eingabe(kopf=kopf, positionen=geprueft, fehler=fehler)
 
 
@@ -295,38 +222,6 @@ def eingabe_pruefen(con: sqlite3.Connection, form) -> Eingabe:
 # Speichern
 # ---------------------------------------------------------------------------
 
-def _freie_positionen_uebernehmen(con, positionen_: list[dict], angebotsnummer: str) -> list[str]:
-    """Legt manuell eingegebene Positionen im Leistungsverzeichnis an (oder verknüpft
-    eine vorhandene Leistung mit gleicher Bezeichnung und Einheit)."""
-    hinweise = []
-    for p in positionen_:
-        if p["leistung_id"] is not None:
-            vorhanden = con.execute("SELECT nummer FROM leistungen WHERE id = ?", (p["leistung_id"],)).fetchone()
-            if vorhanden is None:
-                p["leistung_id"] = None
-            else:
-                p["leistungsnummer"] = vorhanden["nummer"]
-                continue
-        if not p["uebernehmen"]:
-            continue
-        gleiche = leistungen.gleiche_leistung(con, p["bezeichnung"], p["einheit_code"])
-        if gleiche is not None:
-            p["leistung_id"], p["leistungsnummer"] = gleiche["id"], gleiche["nummer"]
-            continue
-        neu_id = leistungen.anlegen(con, {
-            "bezeichnung": p["bezeichnung"], "beschreibung": p["beschreibung"],
-            "art": leistungen.ART_NACH_CODE[p["einheit_code"]], "einheit_code": p["einheit_code"],
-            "preis": p["einzelpreis"], "anzahl": p["menge"], "ust_satz": p["ust_satz"],
-        }, hinweis=f"Aus Angebot {angebotsnummer} übernommen", commit=False)
-        neu = leistungen.laden(con, neu_id)
-        p["leistung_id"], p["leistungsnummer"] = neu_id, neu["nummer"]
-        hinweise.append(f"Neue Leistung {neu['nummer']} „{neu['bezeichnung']}“ ins Leistungsverzeichnis übernommen")
-    return hinweise
-
-
-def _positionen_text(positionen_) -> list[str]:
-    return [f"{zahlen.menge(p['menge'])} {leistungen.einheit_name(p['einheit_code'], p['menge'])} "
-            f"{p['bezeichnung']} à {zahlen.geld(p['einzelpreis'])}" for p in positionen_]
 
 
 def _kopf_anzeige(con, kopf: dict) -> dict:
@@ -361,14 +256,7 @@ def _schreiben(con, angebot_id: int, e: Eingabe, einstellungen) -> berechnung.Su
          zahlen.speicherform(s.netto), zahlen.speicherform(s.ust), zahlen.speicherform(s.gesamt),
          protokoll.jetzt(), angebot_id),
     )
-    con.execute("DELETE FROM angebot_positionen WHERE angebot_id = ?", (angebot_id,))
-    for nr, p in enumerate(e.positionen, start=1):
-        con.execute(
-            "INSERT INTO angebot_positionen (angebot_id, position, leistung_id, leistungsnummer, bezeichnung, "
-            "beschreibung, einheit_code, menge, einzelpreis, ust_satz) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (angebot_id, nr, p["leistung_id"], p["leistungsnummer"], p["bezeichnung"], p["beschreibung"],
-             p["einheit_code"], p["menge"], p["einzelpreis"], p["ust_satz"]),
-        )
+    pos.schreiben(con, "angebot_positionen", "angebot_id", angebot_id, e.positionen)
     return s
 
 
@@ -386,11 +274,11 @@ def anlegen(con: sqlite3.Connection, form) -> int:
              protokoll.jetzt(), protokoll.jetzt()),
         )
         angebot_id = cur.lastrowid
-        hinweise = _freie_positionen_uebernehmen(con, e.positionen, nummer)
+        hinweise = pos.freie_uebernehmen(con, e.positionen, f"Angebot {nummer}")
         s = _schreiben(con, angebot_id, e, einstellungen)
         details = {
             "felder": {KOPF_BEZEICHNUNG[k]: ["", v] for k, v in _kopf_anzeige(con, e.kopf).items() if v},
-            "hinweise": [f"Nummer {nummer}", *_positionen_text(e.positionen),
+            "hinweise": [f"Nummer {nummer}", *pos.als_text(e.positionen),
                          f"Gesamtbetrag {zahlen.geld(s.gesamt)}", *hinweise],
         }
         protokoll.schreiben(con, BEREICH, angebot_id, "angelegt", details)
@@ -409,11 +297,11 @@ def aendern(con: sqlite3.Connection, angebot_id: int, form) -> bool:
     alt_kopf = {k: alt[k] for k in ("kunde_id", "ansprechpartner_id", "datum", "gueltig_bis", "betreff", "anmerkungen")}
     alt_kopf["ansprechpartner_id"] = str(alt_kopf["ansprechpartner_id"] or "")
     with con:
-        hinweise = _freie_positionen_uebernehmen(con, e.positionen, alt["nummer"])
+        hinweise = pos.freie_uebernehmen(con, e.positionen, f"Angebot {alt['nummer']}")
         s = _schreiben(con, angebot_id, e, einstellungen)
         a_alt, a_neu = _kopf_anzeige(con, alt_kopf), _kopf_anzeige(con, e.kopf)
         felder = {KOPF_BEZEICHNUNG[k]: [a_alt[k], a_neu[k]] for k in a_neu if a_alt[k] != a_neu[k]}
-        pos_alt, pos_neu = _positionen_text(alte_pos), _positionen_text(e.positionen)
+        pos_alt, pos_neu = pos.als_text(alte_pos), pos.als_text(e.positionen)
         if pos_alt != pos_neu:
             hinweise = [*(f"Entfernt: {t}" for t in pos_alt if t not in pos_neu),
                         *(f"Hinzugefügt: {t}" for t in pos_neu if t not in pos_alt), *hinweise]
@@ -556,3 +444,10 @@ def pdf_pfad(datenverzeichnis: Path, angebot) -> Path | None:
     if Path(datenverzeichnis).resolve() not in pfad.parents:
         return None
     return pfad
+
+
+# Gemeinsame Funktionen (für bestehende Aufrufer)
+ansprechpartner_name = pos.ansprechpartner_name
+kunden_auswahl = pos.kunden_auswahl
+leistungen_auswahl = pos.leistungen_auswahl
+positionen_aus_formular = pos.aus_formular

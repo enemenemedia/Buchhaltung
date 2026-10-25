@@ -15,7 +15,7 @@
         <a href="{{ url_for('kunden.liste') }}" class="{% if request.blueprint == 'kunden' %}aktiv{% endif %}">Kunden</a>
         <a href="{{ url_for('leistungen.liste') }}" class="{% if request.blueprint == 'leistungen' %}aktiv{% endif %}">Leistungen</a>
         <a href="{{ url_for('angebote.liste') }}" class="{% if request.blueprint == 'angebote' %}aktiv{% endif %}">Angebote</a>
-        <span class="nav-inaktiv" title="folgt">Rechnungen</span>
+        <a href="{{ url_for('rechnungen.liste') }}" class="{% if request.blueprint == 'rechnungen' %}aktiv{% endif %}">Rechnungen</a>
       </nav>
     </div>
   </header>

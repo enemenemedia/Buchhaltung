@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% from "_positionen.html" import fehlertext, positionen_bereich with context %}
+{% block titel %}{{ 'Rechnung bearbeiten' if rechnung else 'Neue Rechnung' }} – X-Rechnung für KMU{% endblock %}
+
+{% macro feld(name, label, typ='text', breite='s6', pflicht=false, hilfe='', attrs='') -%}
+  <label class="feld {{ breite }} {% if fehler.get(name) %}hat-fehler{% endif %}">
+    <span>{{ label }}{% if pflicht %} <em>*</em>{% endif %}</span>
+    <input type="{{ typ }}" name="{{ name }}" id="f-{{ name }}" value="{{ daten.get(name, '') or '' }}" {{ attrs|safe }}>
+    {% if fehler.get(name) %}{{ fehlertext(name) }}{% elif hilfe %}<small>{{ hilfe }}</small>{% endif %}
+  </label>
+{%- endmacro %}
+
+{% block inhalt %}
+<p class="brotkrumen"><a href="{{ url_for('rechnungen.detail', rechnung_id=rechnung.id) if rechnung else url_for('rechnungen.liste') }}">← {{ 'Entwurf #' ~ rechnung.id if rechnung else 'Rechnungen' }}</a></p>
+<div class="seitenkopf">
+  <h1>{% if rechnung %}Rechnungsentwurf #{{ rechnung.id }} bearbeiten{% else %}Neue Rechnung{% endif %}</h1>
+</div>
+
+{% set modus = daten.get('kunde_modus') or 'bestand' %}
+<form method="post" class="formular" novalidate data-beleg-editor data-ausweis="netto"
+      data-klein="{{ '1' if kleinunternehmer else '0' }}" id="rechnung-form">
+
+  <section class="karte">
+    <div class="karte-kopf">
+      <h2>Kunde</h2>
+      <div class="segmente" role="radiogroup" aria-label="Kunde">
+        <label class="segment {% if modus == 'bestand' %}gewaehlt{% endif %}">
+          <input type="radio" name="kunde_modus" value="bestand" {% if modus == 'bestand' %}checked{% endif %}>Aus der Kundendatei</label>
+        <label class="segment {% if modus == 'neu' %}gewaehlt{% endif %}">
+          <input type="radio" name="kunde_modus" value="neu" {% if modus == 'neu' %}checked{% endif %}>Neuer Kunde</label>
+      </div>
+    </div>
+
+    <div class="kunde-bestand" {% if modus != 'bestand' %}hidden{% endif %}>
+      <div class="raster">
+        <label class="feld s6 {% if fehler.get('kunde_id') %}hat-fehler{% endif %}"><span>Kunde <em>*</em></span>
+          <select name="kunde_id" id="kunde">
+            <option value="">– Kunde wählen –</option>
+            {% for k in kunden %}
+              <option value="{{ k.id }}" {% if daten.get('kunde_id')|string == k.id|string %}selected{% endif %}>{{ k.firma }} · {{ k.nummer }}{% if k.ort %} · {{ k.ort }}{% endif %}</option>
+            {% endfor %}
+          </select>
+          {{ fehlertext('kunde_id') }}</label>
+        <label class="feld s6 {% if fehler.get('ansprechpartner_id') %}hat-fehler{% endif %}"><span>Ansprechpartner</span>
+          <select name="ansprechpartner_id" id="ansprechpartner" data-wert="{{ daten.get('ansprechpartner_id', '') }}">
+            <option value="">– ohne –</option>
+          </select>
+          {{ fehlertext('ansprechpartner_id') }}</label>
+      </div>
+    </div>
+
+    <div class="kunde-neu" {% if modus != 'neu' %}hidden{% endif %}>
+      <p class="hinweis-inline">Der neue Kunde wird beim Speichern <strong>in die Kundendatei übernommen</strong> und erhält eine
+        Kundennummer – unter ihr werden Rechnung, XML und PDF abgelegt.</p>
+      <div class="raster">
+        {{ feld('neu_firma', 'Firma / Name', breite='s8', pflicht=true) }}
+        {{ feld('neu_ust_id', 'USt-IdNr.', breite='s4', hilfe='Pflicht bei Reverse Charge') }}
+        {{ feld('neu_strasse', 'Straße und Hausnummer', breite='s6', pflicht=true) }}
+        {{ feld('neu_adresszusatz', 'Adresszusatz', breite='s6') }}
+        {{ feld('neu_plz', 'PLZ', breite='s3', pflicht=true) }}
+        {{ feld('neu_ort', 'Ort', breite='s6', pflicht=true) }}
+        {{ feld('neu_land', 'Land', breite='s3', hilfe='ISO-Code, z. B. DE', attrs='maxlength="2" style="text-transform:uppercase"') }}
+        {{ feld('neu_email', 'E-Mail für Rechnungen', 'email', breite='s6', hilfe='Elektronische Adresse des Kunden (BT-49) – für die XRechnung nötig') }}
+        {{ feld('neu_leitweg_id', 'Leitweg-ID', breite='s6', hilfe='Nur bei öffentlichen Auftraggebern') }}
+      </div>
+      <h3 class="zwischentitel">Ansprechpartner (optional)</h3>
+      <div class="raster">
+        <label class="feld s2"><span>Anrede</span>
+          <select name="neu_ap_anrede">{% for a in ['', 'Frau', 'Herr', 'Divers'] %}<option {% if daten.get('neu_ap_anrede') == a %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
+        {{ feld('neu_ap_vorname', 'Vorname', breite='s3') }}
+        {{ feld('neu_ap_nachname', 'Nachname', breite='s3') }}
+        {{ feld('neu_ap_email', 'E-Mail', 'email', breite='s2') }}
+        {{ feld('neu_ap_telefon', 'Telefon', 'tel', breite='s2') }}
+      </div>
+    </div>
+  </section>
+
+  <section class="karte">
+    <h2>Rechnungsdaten</h2>
+    <div class="raster">
+      {{ feld('rechnungsdatum', 'Rechnungsdatum', 'date', breite='s3', pflicht=true, hilfe='Die Rechnungsnummer wird beim Abschließen vergeben.') }}
+      {{ feld('leistung_von', 'Leistungsdatum', 'date', breite='s3', pflicht=true, hilfe='bzw. Beginn des Leistungszeitraums') }}
+      {{ feld('leistung_bis', 'Leistungszeitraum bis', 'date', breite='s3', hilfe='nur bei einem Zeitraum') }}
+      <label class="feld s3 {% if fehler.get('zahlungsziel_tage') %}hat-fehler{% endif %}"><span>Zahlungsziel <em>*</em></span>
+        <div class="eingabe-suffix"><input type="number" name="zahlungsziel_tage" id="f-zahlungsziel_tage" min="0" max="365"
+          value="{{ daten.get('zahlungsziel_tage', '14') }}" inputmode="numeric"><span>Tage</span></div>
+        {% if fehler.get('zahlungsziel_tage') %}{{ fehlertext('zahlungsziel_tage') }}{% else %}<small id="faellig-anzeige">&nbsp;</small>{% endif %}</label>
+      {{ feld('betreff', 'Betreff', breite='s6', attrs='maxlength="200" placeholder="z. B. Relaunch der Website"') }}
+      {{ feld('bestellnummer', 'Bestellnummer des Kunden', breite='s3', hilfe='BT-13, optional', attrs='maxlength="100"') }}
+      {{ feld('kaeufer_referenz', 'Käuferreferenz / Leitweg-ID', breite='s3',
+              hilfe='BT-10 – leer: Leitweg-ID bzw. Kundennummer', attrs='maxlength="100"') }}
+    </div>
+  </section>
+
+  <section class="karte">
+    <div class="karte-kopf">
+      <h2>Leistungen</h2>
+      <span class="gedimmt klein">{% if kleinunternehmer %}Kleinunternehmer: ohne USt{% else %}Rechnungen weisen Nettopreise zzgl. USt aus{% endif %}</span>
+    </div>
+    {{ positionen_bereich(positionen) }}
+  </section>
+
+  <section class="karte" id="befreiung" {% if kleinunternehmer %}hidden data-immer-aus{% endif %}>
+    <h2>Positionen mit 0 % Umsatzsteuer</h2>
+    <p class="gedimmt">Die XRechnung verlangt für Positionen ohne Umsatzsteuer eine Begründung.</p>
+    <fieldset class="optionen">
+      <label><input type="radio" name="befreiung_art" value="E" {% if daten.get('befreiung_art', 'E') != 'AE' %}checked{% endif %}>
+        <span><strong>Steuerfrei</strong> <span class="gedimmt">– z. B. nach § 4 UStG (Kategorie E)</span></span></label>
+      <label><input type="radio" name="befreiung_art" value="AE" {% if daten.get('befreiung_art') == 'AE' %}checked{% endif %}>
+        <span><strong>Reverse Charge</strong> <span class="gedimmt">– Steuerschuldnerschaft des Leistungsempfängers, § 13b UStG (Kategorie AE)</span></span></label>
+    </fieldset>
+    <div class="raster">
+      {{ feld('befreiung_grund', 'Begründung', breite='s12', hilfe='Erscheint auf der Rechnung und in der XRechnung (BT-120), z. B. „Steuerfrei nach § 4 Nr. 21 UStG“',
+              attrs='maxlength="300"') }}
+    </div>
+  </section>
+
+  <section class="karte">
+    <h2>Anmerkungen &amp; Hinweise</h2>
+    <label class="feld s12 {% if fehler.get('anmerkungen') %}hat-fehler{% endif %}"><span class="sr-only">Anmerkungen</span>
+      <textarea name="anmerkungen" rows="3" maxlength="5000" placeholder="z. B. Dank, Hinweise zur Leistung">{{ daten.get('anmerkungen', '') }}</textarea>
+      {% if fehler.get('anmerkungen') %}{{ fehlertext('anmerkungen') }}{% else %}<small>Erscheint auf der Rechnung und als Bemerkung in der XRechnung (BT-22).</small>{% endif %}</label>
+  </section>
+
+  <div class="aktionen">
+    <a class="knopf" href="{{ url_for('rechnungen.detail', rechnung_id=rechnung.id) if rechnung else url_for('rechnungen.liste') }}">Abbrechen</a>
+    <button class="knopf knopf-primaer" type="submit">Entwurf speichern</button>
+  </div>
+</form>
+
+<script type="application/json" id="kunden-daten">{{ kunden|tojson }}</script>
+<script type="application/json" id="leistungen-daten">{{ leistungsliste|tojson }}</script>
+{% endblock %}
+
+{% block skripte %}
+<script src="{{ url_for('static', filename='beleg-editor.js') }}"></script>
+<script>
+// Rechnungsspezifisch: Kundenmodus, Fälligkeitsdatum, Leitweg-ID, Abschnitt Steuerbefreiung
+(function () {
+  const form = document.getElementById("rechnung-form");
+  const bereiche = { bestand: form.querySelector(".kunde-bestand"), neu: form.querySelector(".kunde-neu") };
+  form.querySelectorAll('input[name="kunde_modus"]').forEach(r => r.addEventListener("change", () => {
+    Object.entries(bereiche).forEach(([k, el]) => (el.hidden = k !== r.value));
+    form.querySelectorAll('input[name="kunde_modus"]').forEach(x => x.closest(".segment").classList.toggle("gewaehlt", x.checked));
+    if (r.value === "neu") form.querySelector('[name="neu_firma"]').focus();
+  }));
+
+  const datum = document.getElementById("f-rechnungsdatum"), ziel = document.getElementById("f-zahlungsziel_tage");
+  const anzeige = document.getElementById("faellig-anzeige");
+  function faellig() {
+    if (!anzeige) return;
+    const d = new Date((datum.value || "") + "T12:00:00"), t = parseInt(ziel.value, 10);
+    if (isNaN(d) || isNaN(t)) { anzeige.textContent = ""; return; }
+    d.setDate(d.getDate() + t);
+    anzeige.textContent = "fällig am " + d.toLocaleDateString("de-DE");
+  }
+  [datum, ziel].forEach(el => el.addEventListener("input", faellig));
+  faellig();
+
+  const referenz = document.getElementById("f-kaeufer_referenz");
+  form.addEventListener("kundewechsel", e => {
+    if (e.detail && (!referenz.value || referenz.dataset.auto === "1")) {
+      referenz.value = e.detail.leitweg_id || "";
+      referenz.dataset.auto = "1";
+    }
+  });
+  referenz.addEventListener("input", () => (referenz.dataset.auto = "0"));
+
+  const befreiung = document.getElementById("befreiung");
+  function nullProzent() {
+    if (befreiung.hasAttribute("data-immer-aus")) return;
+    befreiung.hidden = ![...form.querySelectorAll(".pos-ust")].some(s => s.value === "0");
+  }
+  form.addEventListener("change", nullProzent);
+  new MutationObserver(nullProzent).observe(document.getElementById("pos-liste"), { childList: true });
+  nullProzent();
+})();
+</script>
+{% endblock %}

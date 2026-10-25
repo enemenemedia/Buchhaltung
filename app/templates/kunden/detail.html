@@ -106,6 +106,36 @@
   {% endif %}
 </section>
 
+<section class="karte" id="rechnungen">
+  <div class="karte-kopf">
+    <h2>Rechnungen <span class="gedimmt">({{ rechnungen|length }})</span></h2>
+    {% if not kunde.archiviert_am %}<a class="knopf" href="{{ url_for('rechnungen.neu', kunde=kunde.id) }}">+ Neue Rechnung</a>{% endif %}
+  </div>
+  {% if rechnungen %}
+  <div class="tabelle-rahmen">
+  <table class="tabelle kompakt">
+    <thead><tr><th>Nummer</th><th>Datum</th><th>Betreff</th><th>Fällig</th><th class="rechts">Betrag</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for r in rechnungen %}{% set st = rechnung_status(r) %}
+      <tr class="klickbar" onclick="location.href='{{ url_for('rechnungen.detail', rechnung_id=r.id) }}'">
+        <td class="mono"><a href="{{ url_for('rechnungen.detail', rechnung_id=r.id) }}">{{ r.nummer or 'Entwurf #' ~ r.id }}</a></td>
+        <td>{{ r.rechnungsdatum|datum }}</td>
+        <td class="umbruch-zelle">{{ r.betreff or '–' }}</td>
+        <td>{{ r.faellig_am|datum }}</td>
+        <td class="rechts zahl-fett">{{ r.summe_gesamt|geld }}</td>
+        <td><span class="status status-{{ st }}">{{ RECHNUNG_STATUS[st] }}</span>
+          {% if r.dateiname %}<a href="{{ url_for('rechnungen.pdf', rechnung_id=r.id) }}" target="_blank" rel="noopener" class="klein" onclick="event.stopPropagation()">PDF</a>
+          <a href="{{ url_for('rechnungen.xml', rechnung_id=r.id) }}" class="klein" onclick="event.stopPropagation()">XML</a>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="gedimmt">Für diesen Kunden gibt es noch keine Rechnungen.</p>
+  {% endif %}
+</section>
+
 <section class="karte">
   <h2>Ablage</h2>
   <p class="gedimmt">Angebote, Rechnungen und Dokumente dieses Kunden werden hier abgelegt:</p>

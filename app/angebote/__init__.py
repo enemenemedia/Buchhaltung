@@ -5,7 +5,7 @@ from datetime import date
 from flask import (Blueprint, Response, abort, current_app, flash, redirect, render_template, request,
                    send_file, url_for)
 
-from .. import zahlen
+from .. import positionen as pos
 from ..db import get_db
 from ..leistungen import service as leistungen
 from ..stammdaten import service as stammdaten
@@ -80,7 +80,13 @@ def detail(angebot_id: int):
         summen=service.summen(con, a), verlauf=service.verlauf(con, angebot_id),
         pdf_pfad=service.pdf_pfad(verzeichnis, a), einheit_name=leistungen.einheit_name,
         heute=date.today(),
+        rechnungen=_rechnungen(con, angebot_id),
     )
+
+
+def _rechnungen(con, angebot_id: int):
+    from ..rechnungen import service as rechnungen
+    return rechnungen.fuer_angebot(con, angebot_id)
 
 
 @bp.route("/<int:angebot_id>/bearbeiten", methods=["GET", "POST"])
@@ -103,9 +109,7 @@ def bearbeiten(angebot_id: int):
         return redirect(url_for("angebote.detail", angebot_id=angebot_id))
     daten = {k: ("" if a[k] is None else str(a[k]))
              for k in ("kunde_id", "ansprechpartner_id", "datum", "gueltig_bis", "betreff", "anmerkungen")}
-    positionen = [{**dict(p), "leistung_id": "" if p["leistung_id"] is None else str(p["leistung_id"]),
-                   "menge": zahlen.menge(p["menge"]), "einzelpreis": zahlen.geld(p["einzelpreis"], mit_waehrung=False)}
-                  for p in service.positionen(con, angebot_id)]
+    positionen = pos.fuer_editor(service.positionen(con, angebot_id))
     return _editor(daten, positionen, {}, a)
 
 

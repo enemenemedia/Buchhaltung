@@ -1,7 +1,7 @@
-// Angebots-Editor: Ansprechpartner je Kunde, Leistungsauswahl, freie Positionen,
-// Reihenfolge und Live-Berechnung der Summen (Logik wie app/berechnung.py).
+// Beleg-Editor für Angebote und Rechnungen: Ansprechpartner je Kunde, Leistungsauswahl,
+// freie Positionen, Reihenfolge und Live-Berechnung der Summen (Logik wie app/berechnung.py).
 (function () {
-  const form = document.getElementById("angebot-form");
+  const form = document.querySelector("form[data-beleg-editor]");
   if (!form) return;
 
   const kunden = JSON.parse(document.getElementById("kunden-daten").textContent);
@@ -38,6 +38,7 @@
   const kundeSel = document.getElementById("kunde");
   const apSel = document.getElementById("ansprechpartner");
   function ansprechpartnerFuellen(erstmalig) {
+    if (!kundeSel || !apSel) return;
     const k = kunden.find(x => String(x.id) === kundeSel.value);
     const vorher = erstmalig ? apSel.dataset.wert : "";
     apSel.innerHTML = '<option value="">– ohne –</option>';
@@ -48,12 +49,15 @@
       apSel.add(o);
     });
   }
-  kundeSel.addEventListener("change", () => ansprechpartnerFuellen(false));
+  kundeSel?.addEventListener("change", () => {
+    ansprechpartnerFuellen(false);
+    form.dispatchEvent(new CustomEvent("kundewechsel", { detail: kunden.find(x => String(x.id) === kundeSel.value) }));
+  });
   ansprechpartnerFuellen(true);
 
   // ---- Laufzeit-Schnellwahl -------------------------------------------------
   const datum = document.getElementById("datum"), gueltig = document.getElementById("gueltig");
-  form.querySelectorAll("[data-tage]").forEach(b => b.addEventListener("click", () => {
+  if (datum && gueltig) form.querySelectorAll("[data-tage]").forEach(b => b.addEventListener("click", () => {
     const d = new Date((datum.value || new Date().toISOString().slice(0, 10)) + "T12:00:00");
     d.setDate(d.getDate() + Number(b.dataset.tage));
     gueltig.value = d.toISOString().slice(0, 10);

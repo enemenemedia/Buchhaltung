@@ -286,6 +286,31 @@ input.fehlerhaft, select.fehlerhaft { border-color: var(--gefahr); background: #
 .optionen label > span { font-weight: 400; }
 .tabelle.positionen td { vertical-align: top; }
 
+/* Rechnungen */
+.status-ueberfaellig { background: var(--gefahr-hell); color: var(--gefahr); }
+.status-bezahlt { background: var(--akzent-hell); color: var(--akzent); }
+.kennzahlen-2 { grid-template-columns: repeat(2, minmax(0, 260px)); }
+.hinweis-inline { background: var(--akzent-hell); border-radius: 6px; padding: 8px 12px; margin: 0 0 14px; font-size: .92rem; }
+.hinweisbox.ok-box { background: var(--akzent-hell); border-color: #b6d8cd; }
+.pruefung { border-color: #f0dca6; background: #fffdf5; }
+.pruefung.bereit { border-color: #b6d8cd; background: #f6fbf9; }
+.pruefung.bereit h2 { color: var(--akzent); }
+.pruefliste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pruefliste li { display: flex; gap: 10px; align-items: baseline; }
+.pruefliste .symbol { flex: none; width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center;
+  justify-content: center; font-size: .75rem; font-weight: 700; }
+.pruefliste .ok .symbol { background: var(--akzent-hell); color: var(--akzent); }
+.pruefliste .offen .symbol { background: #f7e1a6; color: #7a5200; }
+.pruefliste .offen { font-weight: 600; }
+.pruefliste .offen .gedimmt { font-weight: 400; }
+.dateiliste { list-style: none; padding: 0; margin: 0 0 8px; display: flex; flex-direction: column; gap: 8px; }
+.dateiliste li { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.dateityp { font-size: .7rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; color: #fff; }
+.dateityp.xml { background: #2a4f8f; }
+.dateityp.pdf { background: #b42318; }
+.zeilenformular { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.zeilenformular .feld { width: 200px; }
+
 @media (max-width: 760px) {
   .spalten { grid-template-columns: 1fr; }
   .raster > .feld { grid-column: span 12; }
@@ -298,6 +323,9 @@ input.fehlerhaft, select.fehlerhaft { border-color: var(--gefahr); background: #
   .pos-summe { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: baseline; }
   .pos-feld.versteckt { display: none; }
   .entfernen-pos { grid-column: 1 / -1; margin-top: 0; justify-self: end; }
+  .tabelle.rechnungen th:nth-child(2), .tabelle.rechnungen td:nth-child(2),
+  .tabelle.rechnungen th:nth-child(4), .tabelle.rechnungen td:nth-child(4),
+  .tabelle.rechnungen th:nth-child(5), .tabelle.rechnungen td:nth-child(5),
   .tabelle.angebote th:nth-child(2), .tabelle.angebote td:nth-child(2),
   .tabelle.angebote th:nth-child(4), .tabelle.angebote td:nth-child(4),
   .tabelle.angebote th:nth-child(5), .tabelle.angebote td:nth-child(5) { display: none; }

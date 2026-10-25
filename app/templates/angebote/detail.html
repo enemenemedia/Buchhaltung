@@ -31,6 +31,10 @@
         <form method="post" action="{{ url_for('angebote.status', angebot_id=a.id) }}"><input type="hidden" name="status" value="abgelehnt">
           <button class="knopf" type="submit">✕ Abgelehnt</button></form>
       {% else %}
+        {% if a.status == 'angenommen' and not rechnungen %}
+        <form method="post" action="{{ url_for('rechnungen.aus_angebot', angebot_id=a.id) }}">
+          <button class="knopf knopf-primaer" type="submit" {% if a.kunde_archiviert %}disabled{% endif %}>Rechnung erstellen</button></form>
+        {% endif %}
         <form method="post" action="{{ url_for('angebote.status', angebot_id=a.id) }}"><input type="hidden" name="status" value="offen">
           <button class="knopf" type="submit">Wieder auf „offen“</button></form>
       {% endif %}
@@ -40,6 +44,14 @@
     </form>
   </div>
 </div>
+
+{% if rechnungen %}
+<div class="hinweisbox ok-box">Zu diesem Angebot gehört
+  {% for r in rechnungen %}<a href="{{ url_for('rechnungen.detail', rechnung_id=r.id) }}">{{ 'Rechnung ' ~ r.nummer if r.nummer else 'der Rechnungsentwurf #' ~ r.id }}</a>
+  ({{ RECHNUNG_STATUS[rechnung_status(r)] }}){% endfor %}.</div>
+{% elif a.status == 'angenommen' %}
+<div class="hinweisbox ok-box">Das Angebot wurde angenommen. Mit „Rechnung erstellen“ übernehmen Sie Kunde und Positionen in einen Rechnungsentwurf.</div>
+{% endif %}
 
 {% if st == 'abgelaufen' %}
 <div class="hinweisbox">Dieses Angebot ist am {{ a.gueltig_bis|datum }} abgelaufen.

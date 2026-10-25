@@ -235,6 +235,122 @@ BEGIN
 END;
 
 
+-- Rechnungen ------------------------------------------------------------
+-- status: 'entwurf' (bearbeitbar, noch ohne Rechnungsnummer)
+--         -> 'offen' (abgeschlossen: Nummer vergeben, XRechnung-XML und PDF abgelegt)
+--         -> 'bezahlt'. „Überfällig“ ergibt sich aus faellig_am.
+-- Die Rechnungsnummer wird erst beim Abschließen vergeben, damit der Nummernkreis
+-- lückenlos bleibt (gelöschte Entwürfe erzeugen keine Lücken).
+-- verkaeufer/kaeufer: Kopie der Stamm- bzw. Kundendaten zum Zeitpunkt des
+-- Abschlusses (JSON), aus denen XML und PDF erzeugt wurden.
+CREATE TABLE IF NOT EXISTS rechnungen (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    nummer              TEXT    UNIQUE,                     -- BT-1, ab Abschluss
+    kunde_id            INTEGER NOT NULL REFERENCES kunden (id) ON DELETE CASCADE,
+    ansprechpartner_id  INTEGER REFERENCES ansprechpartner (id) ON DELETE SET NULL,
+    angebot_id          INTEGER REFERENCES angebote (id) ON DELETE SET NULL,
+    status              TEXT    NOT NULL DEFAULT 'entwurf' CHECK (status IN ('entwurf', 'offen', 'bezahlt')),
+    rechnungsdatum      TEXT    NOT NULL,                   -- BT-2
+    leistung_von        TEXT    NOT NULL,                   -- BT-72 bzw. BT-73
+    leistung_bis        TEXT,                               -- BT-74 (Leistungszeitraum)
+    zahlungsziel_tage   INTEGER NOT NULL DEFAULT 14,
+    faellig_am          TEXT    NOT NULL,                   -- BT-9
+    betreff             TEXT    NOT NULL DEFAULT '',
+    anmerkungen         TEXT    NOT NULL DEFAULT '',        -- BT-22
+    kaeufer_referenz    TEXT    NOT NULL DEFAULT '',        -- BT-10 (Leitweg-ID o. Ä.)
+    bestellnummer       TEXT    NOT NULL DEFAULT '',        -- BT-13
+    befreiung_art       TEXT    NOT NULL DEFAULT 'E' CHECK (befreiung_art IN ('E', 'AE')),
+    befreiung_grund     TEXT    NOT NULL DEFAULT '',        -- BT-120 für 0-%-Positionen
+    kleinunternehmer    INTEGER NOT NULL DEFAULT 0,
+    empfaenger          TEXT    NOT NULL DEFAULT '',
+    verkaeufer          TEXT,                               -- JSON, ab Abschluss
+    kaeufer             TEXT,                               -- JSON, ab Abschluss
+    summe_netto         TEXT    NOT NULL DEFAULT '0',
+    summe_ust           TEXT    NOT NULL DEFAULT '0',
+    summe_gesamt        TEXT    NOT NULL DEFAULT '0',
+    dateiname           TEXT,                               -- ohne Endung, relativ zum Datenverzeichnis
+    abgeschlossen_am    TEXT,
+    bezahlt_am          TEXT,
+    erstellt_am         TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
+    geaendert_am        TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
+    CHECK (leistung_bis IS NULL OR leistung_bis >= leistung_von),
+    CHECK (faellig_am >= rechnungsdatum),
+    CHECK (status = 'entwurf' OR nummer IS NOT NULL)
+);
+
+CREATE INDEX IF NOT EXISTS idx_rechnungen_kunde ON rechnungen (kunde_id);
+CREATE INDEX IF NOT EXISTS idx_rechnungen_angebot ON rechnungen (angebot_id);
+
+CREATE TABLE IF NOT EXISTS rechnung_positionen (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    rechnung_id     INTEGER NOT NULL REFERENCES rechnungen (id) ON DELETE CASCADE,
+    position        INTEGER NOT NULL,
+    leistung_id     INTEGER REFERENCES leistungen (id) ON DELETE SET NULL,
+    leistungsnummer TEXT    NOT NULL DEFAULT '',
+    bezeichnung     TEXT    NOT NULL,
+    beschreibung    TEXT    NOT NULL DEFAULT '',
+    einheit_code    TEXT    NOT NULL,
+    menge           TEXT    NOT NULL,
+    einzelpreis     TEXT    NOT NULL,
+    ust_satz        TEXT    NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_rechnung_positionen ON rechnung_positionen (rechnung_id, position);
+
+-- Abgeschlossene Rechnungen sind unveränderlich (GoBD). Erlaubt sind nur der
+-- Wechsel zwischen „offen“ und „bezahlt“ samt Zahlungsdatum.
+CREATE TRIGGER IF NOT EXISTS rechnungen_schreibschutz
+BEFORE UPDATE ON rechnungen
+FOR EACH ROW
+WHEN OLD.status <> 'entwurf' AND (
+       NEW.nummer IS NOT OLD.nummer OR NEW.kunde_id IS NOT OLD.kunde_id
+    OR NEW.rechnungsdatum IS NOT OLD.rechnungsdatum OR NEW.leistung_von IS NOT OLD.leistung_von
+    OR NEW.leistung_bis IS NOT OLD.leistung_bis OR NEW.faellig_am IS NOT OLD.faellig_am
+    OR NEW.zahlungsziel_tage IS NOT OLD.zahlungsziel_tage OR NEW.betreff IS NOT OLD.betreff
+    OR NEW.anmerkungen IS NOT OLD.anmerkungen OR NEW.kaeufer_referenz IS NOT OLD.kaeufer_referenz
+    OR NEW.bestellnummer IS NOT OLD.bestellnummer OR NEW.befreiung_art IS NOT OLD.befreiung_art
+    OR NEW.befreiung_grund IS NOT OLD.befreiung_grund OR NEW.kleinunternehmer IS NOT OLD.kleinunternehmer
+    OR NEW.empfaenger IS NOT OLD.empfaenger OR NEW.verkaeufer IS NOT OLD.verkaeufer
+    OR NEW.kaeufer IS NOT OLD.kaeufer OR NEW.summe_netto IS NOT OLD.summe_netto
+    OR NEW.summe_ust IS NOT OLD.summe_ust OR NEW.summe_gesamt IS NOT OLD.summe_gesamt
+    OR NEW.dateiname IS NOT OLD.dateiname OR NEW.abgeschlossen_am IS NOT OLD.abgeschlossen_am
+    OR NEW.status = 'entwurf')
+BEGIN
+    SELECT RAISE(ABORT, 'Abgeschlossene Rechnungen können nicht geändert werden.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS rechnungen_loeschschutz
+BEFORE DELETE ON rechnungen
+FOR EACH ROW
+WHEN OLD.status <> 'entwurf' AND EXISTS (SELECT 1 FROM kunden WHERE id = OLD.kunde_id)
+BEGIN
+    SELECT RAISE(ABORT, 'Abgeschlossene Rechnungen können nicht gelöscht werden.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS rechnung_positionen_schutz_insert
+BEFORE INSERT ON rechnung_positionen
+FOR EACH ROW
+WHEN (SELECT status FROM rechnungen WHERE id = NEW.rechnung_id) <> 'entwurf'
+BEGIN
+    SELECT RAISE(ABORT, 'Abgeschlossene Rechnungen können nicht geändert werden.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS rechnung_positionen_schutz_update
+BEFORE UPDATE ON rechnung_positionen
+FOR EACH ROW
+WHEN (SELECT status FROM rechnungen WHERE id = OLD.rechnung_id) <> 'entwurf'
+BEGIN
+    SELECT RAISE(ABORT, 'Abgeschlossene Rechnungen können nicht geändert werden.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS rechnung_positionen_schutz_delete
+BEFORE DELETE ON rechnung_positionen
+FOR EACH ROW
+WHEN (SELECT status FROM rechnungen WHERE id = OLD.rechnung_id) <> 'entwurf'
+BEGIN
+    SELECT RAISE(ABORT, 'Abgeschlossene Rechnungen können nicht geändert werden.');
+END;
+
 -- Änderungsprotokoll ----------------------------------------------------
 -- Allgemeine Tabelle, die auch von späteren Modulen (z. B. Leistungs-
 -- verzeichnis) genutzt werden kann. Kein Fremdschlüssel, damit Einträge

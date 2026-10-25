@@ -1,4 +1,4 @@
-"""PDF-Erzeugung für Angebote (reportlab).
+"""PDF-Erzeugung für Angebote – und Basis für Rechnungen (reportlab).
 
 Layout angelehnt an DIN 5008 (Form B): Anschriftfeld für Fensterumschläge,
 Informationsblock rechts, Logo oben rechts, Fußzeile mit Firmen-, Bank- und
@@ -83,7 +83,12 @@ class _NummerierteSeiten(rl_canvas.Canvas):
         super().save()
 
 
-class _Angebotsdokument:
+class Belegdokument:
+    """Gemeinsames Layout für Angebote und Rechnungen. Unterklassen passen über
+    belegart, info_zeilen(), hinweise() und schluss() den Inhalt an."""
+
+    belegart = "Angebot"
+
     def __init__(self, angebot, positionen, einstellungen, datenverzeichnis: Path):
         self.a = angebot
         self.positionen = positionen
@@ -166,15 +171,14 @@ class _Angebotsdokument:
             y -= 4.6 * mm
 
         # Informationsblock rechts
-        info = [("Angebot-Nr.", a["nummer"]), ("Datum", _datum(a["datum"])),
-                ("Gültig bis", _datum(a["gueltig_bis"])), ("Kunden-Nr.", a["kundennummer"])]
+        info = self.info_zeilen()
         if e["kontakt_name"]:
             info.append(("Ihr Kontakt", e["kontakt_name"]))
         if e["kontakt_telefon"] or e["telefon"]:
             info.append(("Telefon", e["kontakt_telefon"] or e["telefon"]))
         if e["kontakt_email"] or e["email"]:
             info.append(("E-Mail", e["kontakt_email"] or e["email"]))
-        x_label, x_wert = 120 * mm, 142 * mm
+        x_label, x_wert = 116 * mm, 143 * mm
         y = HOEHE - 50 * mm
         for label, wert in info:
             c.setFont("Helvetica", 8)
@@ -193,7 +197,7 @@ class _Angebotsdokument:
         self._entwurf_wasserzeichen(c)
         c.setFont("Helvetica", 8)
         c.setFillColor(GRAU)
-        c.drawString(RAND_LINKS, HOEHE - 15 * mm, f"Angebot {self.a['nummer']} vom {_datum(self.a['datum'])}")
+        c.drawString(RAND_LINKS, HOEHE - 15 * mm, f"{self.belegart} {self.a['nummer']} vom {self.belegdatum()}")
         self._logo(c, 30 * mm, 10 * mm, HOEHE - 10 * mm)
         self._fusszeile(c)
         c.restoreState()
@@ -274,29 +278,19 @@ class _Angebotsdokument:
 
     def inhalt(self) -> list:
         a = self.a
-        teile: list = [Paragraph(f"Angebot {escape(a['nummer'])}", S_TITEL)]
+        teile: list = [Paragraph(f"{self.belegart} {escape(a['nummer'])}", S_TITEL)]
         if a["betreff"]:
             teile += [Spacer(0, 1.5 * mm), Paragraph(_text(a["betreff"]), S_BETREFF)]
         teile += [Spacer(0, 6 * mm), NextPageTemplate("folge"),
                   self._positionstabelle(), Spacer(0, 3 * mm), KeepTogether([self._summentabelle()])]
 
-        hinweise = []
-        if self.klein:
-            hinweise.append("Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.")
-        elif self.ausweis == "brutto":
-            hinweise.append("Alle Preise verstehen sich inklusive der gesetzlichen Umsatzsteuer.")
-        else:
-            hinweise.append("Alle Preise verstehen sich zuzüglich der gesetzlichen Umsatzsteuer.")
-        hinweise.append(f"Dieses Angebot ist gültig bis zum {_datum(a['gueltig_bis'])}.")
-        teile += [Spacer(0, 6 * mm), *(Paragraph(escape(h), S_NORMAL) for h in hinweise)]
+        teile += [Spacer(0, 6 * mm), *(Paragraph(escape(h), S_NORMAL) for h in self.hinweise())]
 
         if a["anmerkungen"]:
             teile += [Spacer(0, 5 * mm),
                       KeepTogether([Paragraph("Anmerkungen und Hinweise", S_ABSCHNITT),
                                     Paragraph(_text(a["anmerkungen"]), S_NORMAL)])]
-        teile += [Spacer(0, 8 * mm),
-                  Paragraph("Wir freuen uns auf Ihren Auftrag. Für Rückfragen stehen wir Ihnen gern zur Verfügung.",
-                            S_NORMAL),
+        teile += [Spacer(0, 8 * mm), Paragraph(escape(self.schluss()), S_NORMAL),
                   Spacer(0, 6 * mm), Paragraph("Mit freundlichen Grüßen", S_NORMAL),
                   Spacer(0, 2 * mm), Paragraph(escape(self.e["kontakt_name"] or self.e["firma"]), S_NORMAL)]
         return teile
@@ -304,8 +298,8 @@ class _Angebotsdokument:
     def erzeugen(self) -> bytes:
         puffer = io.BytesIO()
         doc = BaseDocTemplate(
-            puffer, pagesize=A4, title=f"Angebot {self.a['nummer']}", author=self.e["firma"],
-            subject=self.a["betreff"] or f"Angebot {self.a['nummer']}", creator="X-Rechnung für KMU",
+            puffer, pagesize=A4, title=f"{self.belegart} {self.a['nummer']}", author=self.e["firma"],
+            subject=self.a["betreff"] or f"{self.belegart} {self.a['nummer']}", creator="X-Rechnung für KMU",
         )
         unten = FUSS_HOEHE + 6 * mm
         erste = Frame(RAND_LINKS, unten, INHALT_BREITE, HOEHE - 100 * mm - unten, id="erste",
@@ -320,5 +314,29 @@ class _Angebotsdokument:
         return puffer.getvalue()
 
 
+    # -- Anpassbare Inhalte (Angebot) ------------------------------------------
+
+    def belegdatum(self) -> str:
+        return _datum(self.a["datum"])
+
+    def info_zeilen(self) -> list[tuple[str, str]]:
+        a = self.a
+        return [("Angebot-Nr.", a["nummer"]), ("Datum", _datum(a["datum"])),
+                ("Gültig bis", _datum(a["gueltig_bis"])), ("Kunden-Nr.", a["kundennummer"])]
+
+    def preis_hinweis(self) -> str:
+        if self.klein:
+            return "Gemäß § 19 UStG wird keine Umsatzsteuer berechnet."
+        if self.ausweis == "brutto":
+            return "Alle Preise verstehen sich inklusive der gesetzlichen Umsatzsteuer."
+        return "Alle Preise verstehen sich zuzüglich der gesetzlichen Umsatzsteuer."
+
+    def hinweise(self) -> list[str]:
+        return [self.preis_hinweis(), f"Dieses Angebot ist gültig bis zum {_datum(self.a['gueltig_bis'])}."]
+
+    def schluss(self) -> str:
+        return "Wir freuen uns auf Ihren Auftrag. Für Rückfragen stehen wir Ihnen gern zur Verfügung."
+
+
 def erzeugen(angebot, positionen, einstellungen, datenverzeichnis: Path) -> bytes:
-    return _Angebotsdokument(angebot, positionen, einstellungen, datenverzeichnis).erzeugen()
+    return Belegdokument(angebot, positionen, einstellungen, datenverzeichnis).erzeugen()

@@ -12,7 +12,7 @@ die Bedienung erfolgt im Browser.
 | Firmenstammdaten (mit Logo) | ✅ fertig |
 | Leistungsverzeichnis (mit Import/Export und Änderungsprotokoll) | ✅ fertig |
 | Angebote (mit PDF) | ✅ fertig |
-| X-Rechnung + PDF | geplant |
+| Rechnungen mit XRechnung (XML) + PDF | ✅ fertig |
 
 ## Starten
 
@@ -36,7 +36,7 @@ daten/
 └── kunden/
     └── K00001/              ein Ordner je Kundennummer
         ├── angebote/        z. B. AN-2026-0001.pdf
-        ├── rechnungen/
+        ├── rechnungen/      z. B. 2026-10-25_RE-2026-0001_K00001.xml + .pdf
         └── dokumente/
 ```
 
@@ -116,8 +116,52 @@ daten/
   geschützt.
 - **Nummernkreis** `AN-<Jahr>-0001`, Änderungsprotokoll für alle Schritte.
 
+## Rechnungen
+
+- **Drei Wege zur Rechnung**
+  1. *Aus einem angenommenen Angebot* – Knopf „Rechnung erstellen“ im Angebot übernimmt Kunde,
+     Ansprechpartner, Betreff und Positionen (je Angebot eine Rechnung).
+  2. *Leistungen für einen Kunden zusammenstellen* – Kunde wählen, Leistungen suchen und hinzufügen.
+  3. *Rechnung an einen neuen Kunden* – Kundendaten direkt in der Rechnung erfassen; der Kunde wird
+     beim Speichern in die Kundendatei übernommen und erhält eine Kundennummer.
+  Frei eingegebene Positionen werden wie bei Angeboten ins Leistungsverzeichnis übernommen.
+- **XRechnung 3.0 (UBL 2.1)** mit allen Pflichtangaben: Rechnungsnummer, -datum, Fälligkeit,
+  Leistungsdatum oder -zeitraum, Käuferreferenz/Leitweg-ID (BT-10), Bestellnummer (BT-13),
+  Verkäufer mit elektronischer Adresse, Kontakt, USt-IdNr./Steuernummer und Handelsregister,
+  Käufer mit elektronischer Adresse (BT-49) und Anschrift, SEPA-Überweisung mit IBAN/BIC,
+  Zahlungsbedingungen, Umsatzsteuer je Kategorie (S, E inkl. § 19 UStG, AE/Reverse Charge mit
+  Befreiungsgrund) sowie alle Positionen mit Einheitencode (UN/ECE Rec. 20).
+- **Prüfliste vor dem Abschließen** – zeigt fehlende Angaben (Stammdaten, Kundendaten, Rechnung)
+  mit Link zur Stelle, an der sie ergänzt werden. Abschließen ist erst möglich, wenn alles passt.
+- **Abschließen** vergibt die fortlaufende Rechnungsnummer `RE-<Jahr>-0001` (Entwürfe haben noch keine
+  Nummer, gelöschte Entwürfe erzeugen also keine Lücken), erzeugt XML und PDF und legt beide
+  **unter gleichem Namen** im Rechnungsordner des Kunden ab:
+  `kunden/<Kundennummer>/rechnungen/<Datum>_<Rechnungsnummer>_<Kundennummer>.xml/.pdf`.
+  Abgeschlossene Rechnungen sind unveränderlich (auch per Datenbank-Trigger geschützt).
+- **Zahlungseingang** erfassen; überfällige Rechnungen werden gekennzeichnet, die Liste zeigt offene
+  und überfällige Beträge.
+- Rechnungen werden immer mit **Nettopreisen zzgl. USt** ausgewiesen (wie in der XRechnung).
+
+### Offizielle Prüfung der XRechnung (optional, empfohlen)
+
+Die erzeugten XML-Dateien lassen sich mit denselben Regeln prüfen wie beim KoSIT-Validator:
+UBL-2.1-Schema, EN-16931-Geschäftsregeln (CEN) und nationale XRechnung-Regeln (KoSIT).
+
+```bash
+pip install -r requirements-pruefung.txt
+python werkzeuge/pruefung_einrichten.py            # lädt die Regelwerke nach daten/xrechnung-pruefung
+export XRECHNUNG_ARTEFAKTE=daten/xrechnung-pruefung    # Windows: set XRECHNUNG_ARTEFAKTE=daten\xrechnung-pruefung
+```
+
+Ist die Variable gesetzt, prüft die Anwendung jede XRechnung **vor dem Abschließen** und
+verweigert ungültige Rechnungen. Einzelne Dateien prüfen:
+`python werkzeuge/xrechnung_pruefen.py pfad/zur/rechnung.xml`
+
 ## Tests
 
 ```bash
 python -m pytest
 ```
+
+Mit gesetztem `XRECHNUNG_ARTEFAKTE` werden zusätzlich alle in den Tests erzeugten XRechnungen
+gegen die offiziellen Regeln geprüft.

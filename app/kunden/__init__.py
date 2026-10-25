@@ -71,7 +71,13 @@ def detail(kunde_id: int):
         ordner=service.kundenordner(current_app.config["DATENVERZEICHNIS"], kunde["kundennummer"]),
         loeschbar_ab=date.fromisoformat(kunde["loeschbar_ab"]) if kunde["loeschbar_ab"] else None,
         angebote=_angebote(con, kunde_id),
+        rechnungen=_rechnungen(con, kunde_id),
     )
+
+
+def _rechnungen(con, kunde_id: int):
+    from ..rechnungen import service as rechnungen
+    return rechnungen.fuer_kunde(con, kunde_id)
 
 
 def _angebote(con, kunde_id: int):
