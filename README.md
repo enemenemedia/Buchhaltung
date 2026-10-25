@@ -10,7 +10,7 @@ die Bedienung erfolgt im Browser.
 |---|---|
 | Kundenverwaltung | ✅ fertig |
 | Firmenstammdaten (mit Logo) | ✅ fertig |
-| Leistungsverzeichnis (mit Änderungsprotokoll) | geplant |
+| Leistungsverzeichnis (mit Import/Export und Änderungsprotokoll) | ✅ fertig |
 | Angebote | geplant |
 | X-Rechnung + PDF | geplant |
 
@@ -73,6 +73,26 @@ daten/
   gespeichert. Ein ersetztes oder entferntes Logo wird archiviert, nicht gelöscht.
 - **Änderungsprotokoll** – jede Änderung mit Zeitpunkt sowie altem und neuem Wert.
 - Beim ersten Start öffnet die Anwendung automatisch die Stammdaten.
+
+## Leistungen
+
+- **Drei Abrechnungsarten** – *Zeiteinheit* (Stunde, Minute, Tag, Woche, Monat),
+  *Stück* oder *Pauschal*. Jede Einheit trägt den Einheitencode nach UN/ECE Rec. 20
+  (z. B. `HUR`, `DAY`, `H87`, `LS`), den die X-Rechnung später benötigt.
+- **Preis und Anzahl** – jede Leistung hat einen Netto-Einzelpreis (bis 4 Nachkommastellen)
+  und eine Standard-Anzahl; der Gesamtpreis (netto/brutto) wird im Formular live berechnet.
+  Beträge werden als Dezimalzahlen ohne Gleitkomma-Rundungsfehler gespeichert.
+- **USt-Satz** 19, 7 oder 0 % je Leistung, optionale **Kategorie** zur Gruppierung.
+- **Nummern** frei wählbar oder automatisch (`L0001`, …), eindeutig ohne Groß-/Kleinschreibung.
+- **Import aus CSV oder Excel (.xlsx)** mit Vorschau vor dem Übernehmen:
+  Spalten werden anhand der Überschriften erkannt (z. B. „Preis netto (€)“, „MwSt“, „Menge“),
+  CSV-Trennzeichen und Zeichensatz automatisch bestimmt, deutsche Zahlen (`1.250,50`) gelesen.
+  Fehlerhafte Zeilen werden mit Begründung angezeigt und nicht übernommen. Leistungen mit
+  bereits vorhandener Nummer können aktualisiert oder übersprungen werden. Der Import läuft in
+  einer Transaktion. Vorlagen gibt es als Excel und CSV.
+- **Export** der (gefilterten) Liste als Excel oder CSV – im selben Format wieder importierbar.
+- **Deaktivieren** statt Löschen für nicht mehr angebotene Leistungen; Löschen ist ebenfalls möglich.
+- **Änderungsprotokoll** – jede Änderung (auch per Import) mit Zeitpunkt sowie altem und neuem Wert.
 
 ## Tests
 

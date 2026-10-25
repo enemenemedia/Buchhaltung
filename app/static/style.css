@@ -158,10 +158,88 @@ abbr.xr.offen { background: var(--warn-hell); color: #8a5a00; outline: 1px solid
 .schalter > span { display: flex; flex-direction: column; font-weight: 600; }
 .schalter small { font-weight: 400; }
 
+/* Leistungen */
+.umbruch-erlaubt { flex-wrap: wrap; }
+.filterleiste select.schmal { width: auto; }
+.ausklapp { position: relative; }
+.ausklapp > summary { list-style: none; }
+.ausklapp > summary::-webkit-details-marker { display: none; }
+.ausklapp > summary::after { content: "▾"; font-size: .8em; opacity: .6; }
+.ausklapp-menue { position: absolute; right: 0; top: calc(100% + 4px); background: var(--flaeche); border: 1px solid var(--linie);
+  border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.08); min-width: 160px; z-index: 10; padding: 4px; }
+.ausklapp-menue a { display: block; padding: 8px 12px; border-radius: 4px; color: var(--text); text-decoration: none; }
+.ausklapp-menue a:hover { background: var(--akzent-hell); }
+.tabelle td.umbruch-zelle { white-space: normal; min-width: 200px; }
+.tabelle .kuerzen { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tabelle tr.gruppe td { background: #f3f5f4; font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--gedimmt); padding-top: 6px; padding-bottom: 6px; }
+.tabelle tr.inaktiv td { color: var(--gedimmt); }
+.tabelle tr.inaktiv td a { color: var(--gedimmt); }
+.tabelle.kompakt th, .tabelle.kompakt td { padding: 7px 10px; }
+.zahl-fett { font-weight: 600; font-variant-numeric: tabular-nums; }
+.tabelle td.rechts { font-variant-numeric: tabular-nums; }
+.art { display: inline-block; font-size: .78rem; font-weight: 600; padding: 1px 8px; border-radius: 99px; }
+.art-zeit { background: #e6eefb; color: #2a4f8f; }
+.art-stueck { background: #f3ecfa; color: #6a3d92; }
+.art-pauschal { background: #fdf1e2; color: #8a5300; }
+.marke-status.warn { background: var(--warn-hell); color: #8a5a00; }
+.marke-status.fehler { background: var(--gefahr-hell); color: var(--gefahr); }
+
+.artwahl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.artkarte { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px 14px 44px; border: 1px solid #cdd4cf;
+  border-radius: var(--radius); cursor: pointer; position: relative; background: #fff; }
+.artkarte input { position: absolute; left: 16px; top: 17px; width: 16px; height: 16px; accent-color: var(--akzent); }
+.artkarte.gewaehlt { border-color: var(--akzent); background: var(--akzent-hell); box-shadow: 0 0 0 1px var(--akzent) inset; }
+.art-titel { font-weight: 600; }
+.artwahl.hat-fehler .artkarte { border-color: var(--gefahr); }
+.eingabe-suffix { display: flex; align-items: stretch; }
+.eingabe-suffix input { border-top-right-radius: 0; border-bottom-right-radius: 0; min-width: 0; text-align: right; }
+.eingabe-suffix > span { display: flex; align-items: center; padding: 0 10px; border: 1px solid #cdd4cf; border-left: 0;
+  border-radius: 0 6px 6px 0; background: #f3f5f4; color: var(--gedimmt); font-size: .85rem; white-space: nowrap; }
+.summe { display: flex; justify-content: flex-end; align-items: baseline; gap: 20px; flex-wrap: wrap; margin-top: 16px;
+  padding-top: 14px; border-top: 1px dashed var(--linie); font-variant-numeric: tabular-nums; }
+.summe strong { font-size: 1.25rem; margin-left: 6px; }
+.verwaltung { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.verwaltung h2 { margin-bottom: 4px; }
+.verwaltung p { margin-top: 0; }
+.knopf-gefahr-rand { border-color: #f4c3bd; color: var(--gefahr); }
+.knopf-gefahr-rand:hover { background: var(--gefahr-hell); border-color: var(--gefahr); }
+.knopf[disabled] { opacity: .5; cursor: not-allowed; }
+
+.upload-form { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.ablage { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 28px 16px; text-align: center;
+  border: 2px dashed #cdd4cf; border-radius: var(--radius); background: #fafbfa; cursor: pointer; position: relative; }
+.ablage.aktiv, .ablage:hover { border-color: var(--akzent); background: var(--akzent-hell); }
+.ablage input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.ablage:focus-within { outline: 2px solid var(--akzent); outline-offset: 2px; }
+.ablage .dateiname { color: var(--akzent); font-weight: 600; }
+.kennzahlen { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
+.kennzahlen > div { border: 1px solid var(--linie); border-radius: var(--radius); padding: 10px 14px; display: flex; flex-direction: column; }
+.kennzahlen strong { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.kennzahlen span { color: var(--gedimmt); font-size: .85rem; }
+.kennzahlen .rot strong { color: var(--gefahr); }
+.spaltenchip { display: inline-block; background: #eceeed; border-radius: 4px; padding: 0 6px; margin: 2px 4px 2px 0; font-family: var(--mono); font-size: .8rem; color: var(--text); }
+.vorschau tr.status-fehler td, .vorschau tr.status-doppelt td { background: #fff8f7; }
+.optionen { border: 0; padding: 0; margin: 0 0 16px; display: flex; flex-direction: column; gap: 8px; }
+.optionen legend { margin-bottom: 8px; font-weight: 600; }
+.optionen label { display: flex; gap: 8px; align-items: center; }
+.optionen input { width: auto; accent-color: var(--akzent); }
+
 @media (max-width: 760px) {
   .spalten { grid-template-columns: 1fr; }
   .raster > .feld { grid-column: span 12; }
   .kopf-innen { gap: 16px; }
   .marke span { display: none; }
-  .tabelle th:nth-child(4), .tabelle td:nth-child(4), .tabelle th:nth-child(5), .tabelle td:nth-child(5) { display: none; }
+  .artwahl, .verwaltung { grid-template-columns: 1fr; }
+  .kennzahlen { grid-template-columns: repeat(2, 1fr); }
+  .tabelle.leistungen th:nth-child(3), .tabelle.leistungen td:nth-child(3),
+  .tabelle.leistungen th:nth-child(5), .tabelle.leistungen td:nth-child(5),
+  .tabelle.leistungen th:nth-child(7), .tabelle.leistungen td:nth-child(7) { display: none; }
+  .tabelle.leistungen th:nth-child(1), .tabelle.leistungen td:nth-child(1):not([colspan]) { display: none; }
+  .tabelle.leistungen th, .tabelle.leistungen td { padding-left: 8px; padding-right: 8px; }
+  .tabelle.leistungen th { white-space: normal; }
+  .tabelle.leistungen td.umbruch-zelle { min-width: 0; }
+  .tabelle.leistungen .kuerzen { max-width: 46vw; }
+  .tabelle.leistungen td .klein { display: none; }
+  .tabelle.kunden th:nth-child(4), .tabelle.kunden td:nth-child(4), .tabelle.kunden th:nth-child(5), .tabelle.kunden td:nth-child(5) { display: none; }
 }

@@ -86,6 +86,32 @@ CREATE TABLE IF NOT EXISTS stammdaten (
 
 INSERT OR IGNORE INTO stammdaten (id) VALUES (1);
 
+-- Leistungsverzeichnis --------------------------------------------------
+-- art:          'zeit' | 'stueck' | 'pauschal'
+-- einheit_code: Einheitencode nach UN/ECE Rec. 20 für die XRechnung (BT-130),
+--               z. B. HUR = Stunde, DAY = Tag, H87 = Stück, LS = Pauschale
+-- preis:        Netto-Einzelpreis je Einheit als Dezimaltext (z. B. '85.00')
+-- anzahl:       Standardmenge, die beim Übernehmen in Angebot/Rechnung vorbelegt wird
+-- Beträge werden als Text gespeichert und in Python mit Decimal gerechnet,
+-- damit keine Rundungsfehler durch Gleitkommazahlen entstehen.
+CREATE TABLE IF NOT EXISTS leistungen (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    nummer          TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+    bezeichnung     TEXT    NOT NULL,
+    beschreibung    TEXT    NOT NULL DEFAULT '',
+    kategorie       TEXT    NOT NULL DEFAULT '',
+    art             TEXT    NOT NULL CHECK (art IN ('zeit', 'stueck', 'pauschal')),
+    einheit_code    TEXT    NOT NULL,
+    preis           TEXT    NOT NULL DEFAULT '0',
+    anzahl          TEXT    NOT NULL DEFAULT '1',
+    ust_satz        TEXT    NOT NULL DEFAULT '19',
+    aktiv           INTEGER NOT NULL DEFAULT 1,
+    erstellt_am     TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
+    geaendert_am    TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_leistungen_bezeichnung ON leistungen (bezeichnung);
+
 -- Ansprechpartner (beliebig viele je Kunde) ------------------------------
 CREATE TABLE IF NOT EXISTS ansprechpartner (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,

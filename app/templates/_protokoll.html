@@ -1,6 +1,7 @@
 {# Darstellung des Änderungsprotokolls – gemeinsam für alle Module. #}
 {% set AKTIONEN = {'angelegt': 'Angelegt', 'geaendert': 'Geändert', 'archiviert': 'Archiviert',
-                   'reaktiviert': 'Reaktiviert', 'geloescht': 'Gelöscht', 'logo': 'Logo'} %}
+                   'reaktiviert': 'Reaktiviert', 'geloescht': 'Gelöscht', 'logo': 'Logo',
+                   'aktiviert': 'Aktiviert', 'deaktiviert': 'Deaktiviert'} %}
 
 {% macro protokoll_liste(eintraege, leer_text='Noch keine Einträge.') -%}
   {% if eintraege %}

@@ -4,7 +4,7 @@ import os
 import secrets
 from pathlib import Path
 
-from flask import Flask, flash, redirect, url_for
+from flask import Flask, flash, redirect, request, url_for
 
 from . import db
 
@@ -31,14 +31,17 @@ def create_app(datenverzeichnis: str | Path | None = None) -> Flask:
     app.teardown_appcontext(db.schliessen)
 
     from .kunden import bp as kunden_bp
+    from .leistungen import bp as leistungen_bp
     from .stammdaten import bp as stammdaten_bp
     app.register_blueprint(kunden_bp)
     app.register_blueprint(stammdaten_bp)
+    app.register_blueprint(leistungen_bp)
 
     @app.errorhandler(413)
     def zu_gross(_e):
         flash("Die Datei ist zu groß (höchstens 5 MB).", "fehler")
-        # Uploads gibt es derzeit nur in den Stammdaten (Logo).
+        if request.path.startswith("/leistungen"):
+            return redirect(url_for("leistungen.import_start"))
         return redirect(url_for("stammdaten.seite") + "#logo")
 
     @app.template_filter("datum")

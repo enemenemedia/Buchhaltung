@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block titel %}Leistungen importieren – X-Rechnung für KMU{% endblock %}
+
+{% set STATUS = {'neu': ('Neu', 'aktiv'), 'aktualisieren': ('Änderung', 'warn'), 'unveraendert': ('Unverändert', 'archiv'),
+                 'fehler': ('Fehler', 'fehler'), 'doppelt': ('Doppelt', 'fehler')} %}
+
+{% block inhalt %}
+<p class="brotkrumen"><a href="{{ url_for('leistungen.liste') }}">← Leistungen</a></p>
+<div class="seitenkopf"><h1>Leistungen importieren</h1></div>
+
+{% if not vorschau %}
+<div class="spalten">
+  <section class="karte">
+    <h2>1. Datei wählen</h2>
+    <form method="post" action="{{ url_for('leistungen.import_hochladen') }}" enctype="multipart/form-data" class="upload-form">
+      <label class="ablage" id="ablage">
+        <input type="file" name="datei" id="import-datei" accept=".csv,.txt,.xlsx,.xlsm,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+        <strong>CSV- oder Excel-Datei hierher ziehen</strong>
+        <span class="gedimmt">oder klicken zum Auswählen · .csv, .xlsx · max. 5 MB</span>
+        <span class="dateiname" id="import-name"></span>
+      </label>
+      <button class="knopf knopf-primaer" type="submit">Vorschau anzeigen</button>
+    </form>
+    <p class="gedimmt klein">Es wird noch nichts gespeichert – Sie sehen zuerst eine Vorschau aller Zeilen.</p>
+  </section>
+
+  <section class="karte">
+    <h2>Vorlage</h2>
+    <p>Am einfachsten starten Sie mit der Vorlage. Sie enthält alle Spalten und Beispielzeilen:</p>
+    <p class="knopfgruppe">
+      <a class="knopf" href="{{ url_for('leistungen.vorlage', format_='xlsx') }}">Vorlage Excel</a>
+      <a class="knopf" href="{{ url_for('leistungen.vorlage', format_='csv') }}">Vorlage CSV</a>
+    </p>
+    <p class="gedimmt klein">Ein Export aus „Leistungen → Exportieren“ hat dasselbe Format und kann bearbeitet und wieder importiert werden.</p>
+  </section>
+</div>
+
+<section class="karte abstand-oben">
+  <h2>Aufbau der Datei</h2>
+  <p>Die erste Zeile enthält die Spaltenüberschriften, jede weitere Zeile eine Leistung. Die Reihenfolge der Spalten ist egal.</p>
+  <div class="tabelle-rahmen">
+  <table class="tabelle kompakt">
+    <thead><tr><th>Spalte</th><th>Pflicht</th><th>Inhalt</th><th>Erkannte Überschriften (Beispiele)</th></tr></thead>
+    <tbody>
+      <tr><td>Bezeichnung</td><td>ja</td><td>Name der Leistung</td><td class="gedimmt">Bezeichnung, Leistung, Name, Artikel</td></tr>
+      <tr><td>Preis</td><td>ja</td><td>Netto-Einzelpreis je Einheit, z. B. <span class="mono">95,00</span> oder <span class="mono">1.250,50</span></td><td class="gedimmt">Preis, Einzelpreis, Preis netto, Stundensatz</td></tr>
+      <tr><td>Art</td><td>ja*</td><td><span class="mono">Zeiteinheit</span>, <span class="mono">Stück</span> oder <span class="mono">Pauschal</span></td><td class="gedimmt">Art, Typ, Abrechnungsart</td></tr>
+      <tr><td>Einheit</td><td>ja*</td><td>Zeit: <span class="mono">Stunde</span>, <span class="mono">Minute</span>, <span class="mono">Tag</span>, <span class="mono">Woche</span>, <span class="mono">Monat</span> · Stück: <span class="mono">Stück</span> · Pauschal: <span class="mono">Pauschale</span> (auch Kürzel wie Std, h, Stk, psch)</td><td class="gedimmt">Einheit, ME, Mengeneinheit</td></tr>
+      <tr><td>Anzahl</td><td>nein</td><td>Standardmenge, Vorgabe 1</td><td class="gedimmt">Anzahl, Menge</td></tr>
+      <tr><td>Nummer</td><td>nein</td><td>Eigene Leistungsnummer; ohne Angabe wird sie vergeben. Vorhandene Nummern werden aktualisiert.</td><td class="gedimmt">Nummer, Nr, Artikelnummer</td></tr>
+      <tr><td>USt %</td><td>nein</td><td><span class="mono">19</span>, <span class="mono">7</span> oder <span class="mono">0</span>, Vorgabe 19</td><td class="gedimmt">USt, MwSt, Steuersatz</td></tr>
+      <tr><td>Beschreibung</td><td>nein</td><td>Zusatztext</td><td class="gedimmt">Beschreibung, Langtext</td></tr>
+      <tr><td>Kategorie</td><td>nein</td><td>Gruppierung im Verzeichnis</td><td class="gedimmt">Kategorie, Gruppe, Warengruppe</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="gedimmt klein">* Es genügt eine der beiden Spalten: Aus „Stunde“ ergibt sich die Art Zeiteinheit, aus „Pauschal“ die Einheit Pauschale.
+    CSV-Dateien dürfen Semikolon, Komma oder Tabulator als Trennzeichen verwenden (UTF-8 oder Windows-Zeichensatz).</p>
+</section>
+
+{% else %}
+{% set importierbar = vorschau.anzahl('neu') + vorschau.anzahl('aktualisieren') %}
+<section class="karte">
+  <h2>2. Vorschau: {{ vorschau.rohdaten.dateiname }}</h2>
+  <div class="kennzahlen">
+    <div><strong>{{ vorschau.anzahl('neu') }}</strong><span>neu</span></div>
+    <div><strong>{{ vorschau.anzahl('aktualisieren') }}</strong><span>mit Änderungen</span></div>
+    <div><strong>{{ vorschau.anzahl('unveraendert') }}</strong><span>unverändert</span></div>
+    <div class="{% if vorschau.anzahl('fehler') + vorschau.anzahl('doppelt') %}rot{% endif %}"><strong>{{ vorschau.anzahl('fehler') + vorschau.anzahl('doppelt') }}</strong><span>fehlerhaft</span></div>
+  </div>
+  <p class="gedimmt klein">Erkannte Spalten:
+    {% for feld, titel in vorschau.rohdaten.zuordnung.items() %}<span class="spaltenchip">{{ titel }}</span>{% endfor %}
+    {% if vorschau.rohdaten.ignoriert %}<br>Nicht verwendet: {{ vorschau.rohdaten.ignoriert|join(', ') }}{% endif %}</p>
+
+  <div class="tabelle-rahmen">
+  <table class="tabelle kompakt vorschau">
+    <thead><tr><th>Zeile</th><th>Status</th><th>Nr.</th><th>Bezeichnung</th><th>Art / Einheit</th>
+      <th class="rechts">Preis</th><th class="rechts">Anzahl</th><th class="rechts">USt</th><th>Hinweise</th></tr></thead>
+    <tbody>
+    {% for z in vorschau.zeilen %}
+      {% set s = STATUS[z.status] %}
+      <tr class="status-{{ z.status }}">
+        <td class="mono gedimmt">{{ z.zeile }}</td>
+        <td><span class="marke-status {{ s[1] }}">{{ s[0] }}</span></td>
+        <td class="mono">{{ z.daten.nummer or '' }}{% if not z.daten.nummer and z.status == 'neu' %}<span class="gedimmt">auto</span>{% endif %}</td>
+        <td class="umbruch-zelle">{{ z.daten.bezeichnung or z.werte.get('bezeichnung', '') }}</td>
+        <td>{% if z.daten.art %}{{ ARTEN[z.daten.art] }} · {{ einheit_name(z.daten.einheit_code) }}{% else %}<span class="gedimmt">{{ z.werte.get('art', '') }} {{ z.werte.get('einheit', '') }}</span>{% endif %}</td>
+        <td class="rechts">{{ z.anzeige('preis') }}</td>
+        <td class="rechts">{{ z.anzeige('anzahl') }}</td>
+        <td class="rechts">{{ z.daten.ust_satz }} %</td>
+        <td class="umbruch-zelle klein">
+          {% for f in z.fehler %}<div class="fehlertext">{{ f }}</div>{% endfor %}
+          {% for feld, werte in z.aenderungen.items() %}<div>{{ feld }}: <del>{{ werte[0] or '–' }}</del> → <ins>{{ werte[1] or '–' }}</ins></div>{% endfor %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<form method="post" action="{{ url_for('leistungen.import_bestaetigen', token=token) }}" class="karte">
+  <h2>3. Übernehmen</h2>
+  {% if vorschau.anzahl('aktualisieren') %}
+  <fieldset class="optionen">
+    <legend>{{ vorschau.anzahl('aktualisieren') }} Leistung{{ 'en' if vorschau.anzahl('aktualisieren') != 1 }} mit bereits vorhandener Nummer weich{{ 'en' if vorschau.anzahl('aktualisieren') != 1 else 't' }} vom Bestand ab:</legend>
+    <label><input type="radio" name="bestehende" value="aktualisieren" checked> Bestand mit den Werten aus der Datei aktualisieren (wird protokolliert)</label>
+    <label><input type="radio" name="bestehende" value="ueberspringen"> Vorhandene Leistungen unverändert lassen</label>
+  </fieldset>
+  {% endif %}
+  {% if vorschau.anzahl('fehler') + vorschau.anzahl('doppelt') %}
+  <p class="hinweisbox">Fehlerhafte Zeilen werden nicht übernommen. Sie können die Datei korrigieren und erneut hochladen.</p>
+  {% endif %}
+  <div class="knopfgruppe">
+    <button class="knopf" type="submit" name="aktion" value="abbrechen" formnovalidate>Abbrechen</button>
+    <a class="knopf" href="{{ url_for('leistungen.import_start') }}">Andere Datei wählen</a>
+    <button class="knopf knopf-primaer" type="submit" name="aktion" value="importieren" {% if not importierbar %}disabled{% endif %}>
+      {% if importierbar %}Import ausführen{% else %}Nichts zu importieren{% endif %}</button>
+  </div>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block skripte %}
+<script>
+(function () {
+  const eingabe = document.getElementById("import-datei");
+  if (!eingabe) return;
+  const ablage = document.getElementById("ablage");
+  const name = document.getElementById("import-name");
+  eingabe.addEventListener("change", () => { name.textContent = eingabe.files[0] ? eingabe.files[0].name : ""; });
+  ["dragenter", "dragover"].forEach(t => ablage.addEventListener(t, e => { e.preventDefault(); ablage.classList.add("aktiv"); }));
+  ["dragleave", "drop"].forEach(t => ablage.addEventListener(t, () => ablage.classList.remove("aktiv")));
+  ablage.addEventListener("drop", e => {
+    e.preventDefault();
+    if (e.dataTransfer.files.length) { eingabe.files = e.dataTransfer.files; eingabe.dispatchEvent(new Event("change")); }
+  });
+})();
+</script>
+{% endblock %}

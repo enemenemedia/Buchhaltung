@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block titel %}Leistungen – X-Rechnung für KMU{% endblock %}
+{% block inhalt %}
+<div class="seitenkopf">
+  <h1>Leistungen</h1>
+  <div class="knopfgruppe umbruch-erlaubt">
+    <a class="knopf" href="{{ url_for('leistungen.import_start') }}">Importieren</a>
+    <details class="ausklapp">
+      <summary class="knopf">Exportieren</summary>
+      <div class="ausklapp-menue">
+        <a href="{{ url_for('leistungen.export', format_='xlsx', q=filter.suche, art=filter.art, kategorie=filter.kategorie, status=filter.status) }}">Excel (.xlsx)</a>
+        <a href="{{ url_for('leistungen.export', format_='csv', q=filter.suche, art=filter.art, kategorie=filter.kategorie, status=filter.status) }}">CSV (.csv)</a>
+      </div>
+    </details>
+    <a class="knopf knopf-primaer" href="{{ url_for('leistungen.neu') }}">+ Neue Leistung</a>
+  </div>
+</div>
+
+<form class="filterleiste" method="get">
+  <input type="search" name="q" value="{{ filter.suche }}" placeholder="Nummer, Bezeichnung oder Kategorie suchen" aria-label="Suche">
+  <div class="segmente" role="radiogroup" aria-label="Art">
+    {% for wert, text in [('', 'Alle'), ('zeit', 'Zeit'), ('stueck', 'Stück'), ('pauschal', 'Pauschal')] %}
+      <label class="segment {% if filter.art == wert %}gewaehlt{% endif %}">
+        <input type="radio" name="art" value="{{ wert }}" {% if filter.art == wert %}checked{% endif %} onchange="this.form.submit()">{{ text }}
+      </label>
+    {% endfor %}
+  </div>
+  {% if kategorien %}
+  <select name="kategorie" aria-label="Kategorie" onchange="this.form.submit()" class="schmal">
+    <option value="">Alle Kategorien</option>
+    {% for k in kategorien %}<option {% if filter.kategorie == k %}selected{% endif %}>{{ k }}</option>{% endfor %}
+  </select>
+  {% endif %}
+  <select name="status" aria-label="Status" onchange="this.form.submit()" class="schmal">
+    {% for wert, text in [('aktiv', 'Aktive'), ('inaktiv', 'Deaktivierte'), ('alle', 'Alle')] %}
+      <option value="{{ wert }}" {% if filter.status == wert %}selected{% endif %}>{{ text }}</option>
+    {% endfor %}
+  </select>
+  <button class="knopf" type="submit">Suchen</button>
+</form>
+
+{% if leistungen %}
+<div class="tabelle-rahmen">
+<table class="tabelle leistungen">
+  <thead>
+    <tr>
+      <th>Nr.</th><th>Leistung</th><th>Art</th>
+      <th class="rechts">Einzelpreis</th><th class="rechts">Anzahl</th><th class="rechts">Gesamt netto</th><th class="rechts">USt</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% set ns = namespace(kat=none) %}
+  {% for l in leistungen %}
+    {% if l.kategorie != ns.kat and (kategorien|length > 0) %}
+      {% set ns.kat = l.kategorie %}
+      <tr class="gruppe"><td colspan="7">{{ l.kategorie or 'Ohne Kategorie' }}</td></tr>
+    {% endif %}
+    <tr class="klickbar {% if not l.aktiv %}inaktiv{% endif %}" onclick="location.href='{{ url_for('leistungen.bearbeiten', leistung_id=l.id) }}'">
+      <td class="mono">{{ l.nummer }}</td>
+      <td class="umbruch-zelle">
+        <a href="{{ url_for('leistungen.bearbeiten', leistung_id=l.id) }}">{{ l.bezeichnung }}</a>
+        {% if not l.aktiv %}<span class="marke-status archiv">deaktiviert</span>{% endif %}
+        {% if l.beschreibung %}<div class="gedimmt klein kuerzen">{{ l.beschreibung }}</div>{% endif %}
+      </td>
+      <td><span class="art art-{{ l.art }}">{{ ARTEN[l.art] }}</span></td>
+      <td class="rechts">{{ l.preis|geld }}<span class="gedimmt klein"> / {{ einheit_name(l.einheit_code) }}</span></td>
+      <td class="rechts">{{ l.anzahl|menge }} <span class="gedimmt klein">{{ einheit_name(l.einheit_code, l.anzahl) }}</span></td>
+      <td class="rechts zahl-fett">{{ gesamtpreis(l.preis, l.anzahl)|geld }}</td>
+      <td class="rechts">{{ l.ust_satz }} %</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="hinweis">{{ leistungen|length }} Leistung{% if leistungen|length != 1 %}en{% endif %} · Preise netto</p>
+{% else %}
+<div class="leer">
+  {% if filter.suche or filter.art or filter.kategorie or filter.status != 'aktiv' %}
+    Keine Leistungen zu diesem Filter gefunden. <a href="{{ url_for('leistungen.liste') }}">Filter zurücksetzen</a>
+  {% else %}
+    <p>Noch keine Leistungen erfasst.</p>
+    <p><a class="knopf knopf-primaer" href="{{ url_for('leistungen.neu') }}">Erste Leistung anlegen</a>
+       <a class="knopf" href="{{ url_for('leistungen.import_start') }}">Aus CSV/Excel importieren</a></p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

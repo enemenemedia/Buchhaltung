@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% from "_protokoll.html" import protokoll_liste %}
+{% block titel %}{{ 'Neue Leistung' if neu else leistung.bezeichnung }} – X-Rechnung für KMU{% endblock %}
+
+{% macro fehlertext(name) -%}
+  {% if fehler.get(name) %}<small class="fehlertext">{{ fehler[name] }}</small>{% endif %}
+{%- endmacro %}
+
+{% block inhalt %}
+<p class="brotkrumen"><a href="{{ url_for('leistungen.liste') }}">← Leistungen</a></p>
+<div class="seitenkopf">
+  <div>
+    <h1>{% if neu %}Neue Leistung{% else %}{{ leistung.bezeichnung }} <span class="mono gedimmt">{{ leistung.nummer }}</span>{% endif %}</h1>
+    {% if not neu %}
+    <p class="untertitel">angelegt am {{ leistung.erstellt_am|datum }} · zuletzt geändert am {{ leistung.geaendert_am|datum(true) }}
+      · {% if leistung.aktiv %}<span class="marke-status aktiv">aktiv</span>{% else %}<span class="marke-status archiv">deaktiviert</span>{% endif %}</p>
+    {% endif %}
+  </div>
+</div>
+
+<form method="post" class="formular" novalidate id="leistung-form">
+  <section class="karte">
+    <h2>Art der Abrechnung</h2>
+    <div class="artwahl {% if fehler.get('art') %}hat-fehler{% endif %}" role="radiogroup">
+      {% for art, titel, text in [('zeit', 'Zeiteinheit', 'Nach Aufwand, z. B. Stunden oder Tage'),
+                                   ('stueck', 'Stück', 'Menge × Stückpreis'),
+                                   ('pauschal', 'Pauschal', 'Fester Preis für die gesamte Leistung')] %}
+      <label class="artkarte">
+        <input type="radio" name="art" value="{{ art }}" {% if daten.get('art') == art %}checked{% endif %}>
+        <span class="art-titel">{{ titel }}</span>
+        <span class="gedimmt klein">{{ text }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    {{ fehlertext('art') }}
+  </section>
+
+  <section class="karte">
+    <h2>Leistung</h2>
+    <div class="raster">
+      <label class="feld s3 {% if fehler.get('nummer') %}hat-fehler{% endif %}"><span>Nummer</span>
+        <input name="nummer" value="{{ daten.get('nummer', '') }}" {% if neu %}placeholder="{{ naechste }}"{% endif %} maxlength="30">
+        {% if fehler.get('nummer') %}{{ fehlertext('nummer') }}{% elif neu %}<small>Leer lassen für automatische Nummer</small>{% endif %}</label>
+      <label class="feld s6 {% if fehler.get('bezeichnung') %}hat-fehler{% endif %}"><span>Bezeichnung <em>*</em></span>
+        <input name="bezeichnung" value="{{ daten.get('bezeichnung', '') }}" maxlength="200" required {% if neu %}autofocus{% endif %}>
+        {{ fehlertext('bezeichnung') }}</label>
+      <label class="feld s3"><span>Kategorie</span>
+        <input name="kategorie" value="{{ daten.get('kategorie', '') }}" list="kategorien" placeholder="optional">
+        <datalist id="kategorien">{% for k in kategorien %}<option value="{{ k }}">{% endfor %}</datalist></label>
+      <label class="feld s12"><span>Beschreibung</span>
+        <textarea name="beschreibung" rows="2" placeholder="Erscheint als Zusatztext auf Angebot und Rechnung">{{ daten.get('beschreibung', '') }}</textarea></label>
+    </div>
+  </section>
+
+  <section class="karte">
+    <h2>Preis &amp; Anzahl</h2>
+    <div class="raster">
+      <label class="feld s3 {% if fehler.get('einheit_code') %}hat-fehler{% endif %}"><span>Einheit</span>
+        <select name="einheit_code" id="einheit">
+          {% for art, liste in EINHEITEN.items() %}
+            {% for e in liste %}
+              <option value="{{ e.code }}" data-art="{{ art }}" data-mehrzahl="{{ e.mehrzahl }}"
+                      {% if daten.get('einheit_code') == e.code %}selected{% endif %}>{{ e.name }}</option>
+            {% endfor %}
+          {% endfor %}
+        </select>
+        {{ fehlertext('einheit_code') }}</label>
+      <label class="feld s3 {% if fehler.get('preis') %}hat-fehler{% endif %}"><span>Einzelpreis netto <em>*</em></span>
+        <div class="eingabe-suffix"><input name="preis" id="preis" value="{{ daten.get('preis', '') }}" inputmode="decimal" placeholder="0,00" required>
+          <span>€ / <span class="einheit-name">Einheit</span></span></div>
+        {{ fehlertext('preis') }}</label>
+      <label class="feld s3 {% if fehler.get('anzahl') %}hat-fehler{% endif %}"><span>Anzahl <em>*</em></span>
+        <div class="eingabe-suffix"><input name="anzahl" id="anzahl" value="{{ daten.get('anzahl', '1') }}" inputmode="decimal" required>
+          <span class="einheit-mehrzahl">Einheiten</span></div>
+        {% if fehler.get('anzahl') %}{{ fehlertext('anzahl') }}{% else %}<small>Standardmenge für Angebote und Rechnungen</small>{% endif %}</label>
+      <label class="feld s3 {% if fehler.get('ust_satz') %}hat-fehler{% endif %}"><span>USt-Satz</span>
+        <select name="ust_satz" id="ust">
+          {% for s in UST_SAETZE %}<option value="{{ s }}" {% if daten.get('ust_satz', '19') == s %}selected{% endif %}>{{ s }} %</option>{% endfor %}
+        </select>
+        {{ fehlertext('ust_satz') }}</label>
+    </div>
+    <div class="summe" aria-live="polite">
+      <span class="gedimmt" id="rechnung">–</span>
+      <span>Gesamt netto <strong id="netto">–</strong></span>
+      <span class="gedimmt">brutto <span id="brutto">–</span></span>
+    </div>
+  </section>
+
+  <div class="aktionen">
+    <a class="knopf" href="{{ url_for('leistungen.liste') }}">Abbrechen</a>
+    {% if neu %}<button class="knopf" type="submit" name="weiter" value="1">Speichern &amp; nächste</button>{% endif %}
+    <button class="knopf knopf-primaer" type="submit">{{ 'Leistung anlegen' if neu else 'Änderungen speichern' }}</button>
+  </div>
+</form>
+
+{% if not neu %}
+<section class="karte">
+  <h2>Änderungsprotokoll</h2>
+  {{ protokoll_liste(verlauf) }}
+</section>
+
+<section class="karte verwaltung">
+  <div>
+    <h2>{{ 'Deaktivieren' if leistung.aktiv else 'Wieder aktivieren' }}</h2>
+    <p class="gedimmt">{% if leistung.aktiv %}Deaktivierte Leistungen bleiben erhalten, werden aber bei neuen Angeboten und Rechnungen nicht mehr vorgeschlagen.
+      {% else %}Die Leistung wird wieder bei neuen Angeboten und Rechnungen vorgeschlagen.{% endif %}</p>
+    <form method="post" action="{{ url_for('leistungen.aktiv', leistung_id=leistung.id) }}">
+      <input type="hidden" name="aktiv" value="{{ '0' if leistung.aktiv else '1' }}">
+      <button class="knopf" type="submit">{{ 'Deaktivieren' if leistung.aktiv else 'Aktivieren' }}</button>
+    </form>
+  </div>
+  <div>
+    <h2>Löschen</h2>
+    <p class="gedimmt">Bereits erstellte Angebote und Rechnungen bleiben unverändert. Das Änderungsprotokoll bleibt erhalten.</p>
+    <form method="post" action="{{ url_for('leistungen.loeschen', leistung_id=leistung.id) }}"
+          onsubmit="return confirm('Leistung {{ leistung.nummer }} endgültig löschen?')">
+      <button class="knopf knopf-gefahr-rand" type="submit">Leistung löschen</button>
+    </form>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block skripte %}
+<script src="{{ url_for('static', filename='leistungen.js') }}"></script>
+{% endblock %}

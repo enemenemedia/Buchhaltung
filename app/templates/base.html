@@ -13,7 +13,7 @@
       <nav class="hauptnav">
         <a href="{{ url_for('stammdaten.seite') }}" class="{% if request.blueprint == 'stammdaten' %}aktiv{% endif %}">Stammdaten</a>
         <a href="{{ url_for('kunden.liste') }}" class="{% if request.blueprint == 'kunden' %}aktiv{% endif %}">Kunden</a>
-        <span class="nav-inaktiv" title="folgt">Leistungen</span>
+        <a href="{{ url_for('leistungen.liste') }}" class="{% if request.blueprint == 'leistungen' %}aktiv{% endif %}">Leistungen</a>
         <span class="nav-inaktiv" title="folgt">Angebote</span>
         <span class="nav-inaktiv" title="folgt">Rechnungen</span>
       </nav>
