@@ -17,6 +17,12 @@
         <a href="{{ url_for('angebote.liste') }}" class="{% if request.blueprint == 'angebote' %}aktiv{% endif %}">Angebote</a>
         <a href="{{ url_for('rechnungen.liste') }}" class="{% if request.blueprint == 'rechnungen' %}aktiv{% endif %}">Rechnungen</a>
       </nav>
+      {% if DESKTOP %}
+      <form method="post" action="{{ url_for('system_beenden') }}" class="beenden-form"
+            onsubmit="return confirm('X-Rechnung für KMU beenden?')">
+        <button type="submit" class="beenden-knopf" title="Programm beenden">Beenden</button>
+      </form>
+      {% endif %}
     </div>
   </header>
 
@@ -28,6 +34,10 @@
     {% endwith %}
     {% block inhalt %}{% endblock %}
   </main>
+  <footer class="fuss">
+    <span>X-Rechnung für KMU {{ PROGRAMM_VERSION }}</span>
+    <span>Datenordner: <span class="mono">{{ DATENORDNER }}</span></span>
+  </footer>
   {% block skripte %}{% endblock %}
 </body>
 </html>

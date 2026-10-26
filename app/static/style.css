@@ -339,6 +339,15 @@ input.fehlerhaft, select.fehlerhaft { border-color: var(--gefahr); background: #
 .korrektur-karte { border-color: #cddaf0; background: #f8fafd; }
 .s9 { grid-column: span 9; }
 
+/* Programmrahmen */
+.beenden-form { margin-left: auto; }
+.beenden-knopf { background: transparent; border: 1px solid rgba(255,255,255,.35); color: #e6f0ec; border-radius: 6px;
+  padding: 5px 12px; font: inherit; font-size: .88rem; cursor: pointer; white-space: nowrap; }
+.beenden-knopf:hover { background: rgba(255,255,255,.12); }
+.fuss { max-width: 1120px; margin: 0 auto; padding: 0 16px 28px; display: flex; justify-content: space-between; gap: 12px;
+  flex-wrap: wrap; color: var(--gedimmt); font-size: .8rem; }
+.fuss .mono { word-break: break-all; }
+
 @media (max-width: 760px) {
   .spalten { grid-template-columns: 1fr; }
   .raster > .feld { grid-column: span 12; }

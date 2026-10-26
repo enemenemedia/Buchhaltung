@@ -14,8 +14,41 @@ die Bedienung erfolgt im Browser.
 | Angebote (mit PDF) | ✅ fertig |
 | Rechnungen mit XRechnung (XML) + PDF | ✅ fertig |
 | Stornorechnungen und Rechnungskorrekturen | ✅ fertig |
+| Windows-Installationsprogramm | ✅ fertig |
 
-## Starten
+## Installation unter Windows
+
+`X-Rechnung-fuer-KMU-Setup-<Version>.exe` ausführen – Python und alle Komponenten
+(inklusive XRechnung-Prüfung) sind enthalten, Administratorrechte sind nicht nötig.
+
+- **Programmordner:** `%LOCALAPPDATA%\Programs\X-Rechnung für KMU` (änderbar)
+- **Datenordner:** `Dokumente\X-Rechnung` (im Installer änderbar; darf nicht im Programmordner liegen)
+- Verknüpfungen im Startmenü (Programm, „Datenordner öffnen“, Deinstallation) und auf dem Desktop
+- Das Programm startet einen lokalen Server (nur `127.0.0.1`, Port 8765 oder ein freier Port) und
+  öffnet den Browser. Ein zweiter Start öffnet nur den Browser. Beendet wird über **Beenden** oben rechts.
+- **Update:** neue Setup-Datei einfach ausführen – ein laufendes Programm wird beendet,
+  Datenordner und Einstellungen bleiben erhalten.
+- **Deinstallation** (Startmenü oder „Apps & Features“) entfernt nur das Programm. Die Daten bleiben
+  wegen der gesetzlichen Aufbewahrungsfristen erhalten.
+- Protokoll für die Fehlersuche: `<Datenordner>\protokoll\programm.log`
+- Die Setup-Datei ist nicht signiert. Windows SmartScreen meldet daher „Der Computer wurde durch
+  Windows geschützt“; weiter über „Weitere Informationen“ → „Trotzdem ausführen“.
+
+### Installer bauen
+
+Der Installer wird unter Linux gebaut (kein Windows nötig):
+
+```bash
+sudo apt install nsis
+python3 werkzeuge/pruefung_einrichten.py build/pruefung         # Prüfartefakte (optional)
+python3 windows/bauen.py --pruefung build/pruefung                # → dist/X-Rechnung-fuer-KMU-Setup-<Version>.exe
+```
+
+`bauen.py` lädt Python 3.12 für Windows (conda-forge, per micromamba) und die Pakete als
+Windows-Wheels von PyPI. Danach fügt es Anwendung, Starter (`windows/starter.py`) und Prüfregeln hinzu
+und erzeugt den Installer mit NSIS (`windows/installer.nsi`). Die Version kommt aus `app/__init__.py`.
+
+## Starten (Entwicklung)
 
 ```bash
 python -m venv .venv

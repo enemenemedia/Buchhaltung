@@ -1,15 +1,24 @@
 """X-Rechnung für KMU – Flask-Anwendung."""
 
+__version__ = "1.0.0"
+
 import os
 import secrets
 from pathlib import Path
 
-from flask import Flask, flash, redirect, request, url_for
+from urllib.parse import urlparse
+
+from flask import Flask, abort, flash, jsonify, redirect, request, url_for
 
 from . import db
 
 
-def create_app(datenverzeichnis: str | Path | None = None) -> Flask:
+APP_KENNUNG = "xrechnung-kmu"
+
+
+def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None) -> Flask:
+    """beenden: optionale Funktion, die der Windows-Starter übergibt. Ist sie gesetzt,
+    zeigt die Oberfläche einen Knopf „Beenden“, der den lokalen Server stoppt."""
     app = Flask(__name__)
 
     # Datenbank und alle Kundenordner liegen gemeinsam in einem Verzeichnis.
@@ -58,6 +67,29 @@ def create_app(datenverzeichnis: str | Path | None = None) -> Flask:
         if mit_zeit and len(teile) > 1:
             text += " " + teile[1][:5]
         return text
+
+    @app.context_processor
+    def _programm():
+        return {"PROGRAMM_VERSION": __version__, "DESKTOP": beenden is not None,
+                "DATENORDNER": str(app.config["DATENVERZEICHNIS"])}
+
+    @app.get("/system/kennung")
+    def kennung():
+        # Der Windows-Starter erkennt daran eine bereits laufende Instanz.
+        return jsonify(app=APP_KENNUNG, version=__version__, daten=str(app.config["DATENVERZEICHNIS"]))
+
+    @app.post("/system/beenden")
+    def system_beenden():
+        if beenden is None:
+            abort(404)
+        # Nur Anfragen aus der eigenen Oberfläche annehmen (Schutz vor fremden Webseiten)
+        herkunft = request.headers.get("Origin") or request.headers.get("Referer") or ""
+        if urlparse(herkunft).netloc != request.host:
+            abort(403)
+        beenden()
+        return ("<!doctype html><meta charset='utf-8'><title>Beendet</title>"
+                "<body style='font-family:system-ui;padding:3rem;color:#1d2420'>"
+                "<h1>X-Rechnung für KMU wurde beendet.</h1><p>Sie können dieses Browserfenster schließen.</p>")
 
     @app.get("/")
     def start():
