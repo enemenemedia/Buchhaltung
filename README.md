@@ -68,6 +68,43 @@ Mit `--variante voll` oder `--variante test` wird nur eine der beiden Setup-Date
 Windows-Wheels von PyPI. Danach fügt es Anwendung, Starter (`windows/starter.py`) und Prüfregeln hinzu
 und erzeugt den Installer mit NSIS (`windows/installer.nsi`). Die Version kommt aus `app/__init__.py`.
 
+## Installation unter macOS
+
+Ebenfalls zwei Pakete, jeweils ein ZIP mit dem Programm „X-Rechnung für KMU.app“ – für
+Apple Silicon und Intel-Macs (macOS 10.15 oder neuer), Python und alle Komponenten sind enthalten:
+
+| | Vollversion | Testversion |
+|---|---|---|
+| Datei | `X-Rechnung-fuer-KMU-<Version>-macOS.zip` | `X-Rechnung-fuer-KMU-Testversion-<Version>-macOS.zip` |
+| Lizenz | wird beim ersten Start abgefragt; ohne gültige Lizenz startet das Programm nicht | keine – XRechnung (XML) wird nicht erstellt |
+
+- **Installation:** ZIP öffnen, „X-Rechnung für KMU“ in den Ordner „Programme“ ziehen.
+  Ein Mac-Programm hat keinen Installer; die Lizenzabfrage des Windows-Installers erfolgt deshalb
+  beim ersten Start (Dialog für Lizenznehmer und Lizenznummer, Prüfung wie unter Windows).
+- **Datenordner:** wird beim ersten Start gewählt (Vorschlag `~/Documents/X-Rechnung`), gespeichert in
+  `~/Library/Application Support/X-Rechnung/einstellungen.ini`. Die Lizenz liegt wie unter Windows als
+  `lizenz.ini` im Datenordner. Liegt dort bereits eine Lizenz (auch eine abgelaufene), startet das
+  Programm immer – ohne gültige Lizenz als Testversion, damit die Daten zugänglich bleiben.
+- Das Programm läuft im Browser (nur `127.0.0.1`), ohne Symbol im Dock; beendet wird es über **Beenden**.
+  Ein zweiter Start öffnet nur den Browser.
+- **Nicht notarisiert:** Die Programmdateien sind ad hoc signiert (nötig für Apple Silicon), aber nicht mit
+  einer Apple-Developer-ID. macOS meldet daher beim ersten Öffnen, dass der Entwickler nicht überprüft
+  werden kann: unter macOS 15 einmal öffnen, dann *Systemeinstellungen → Datenschutz & Sicherheit →
+  Dennoch öffnen*; unter macOS 14 und älter mit ctrl-Klick → *Öffnen*. Abhilfe schafft eine
+  Developer-ID (Apple Developer Program) mit Notarisierung – das geht auch unter Linux mit `rcodesign`.
+
+### macOS-Pakete bauen
+
+Ebenfalls unter Linux:
+
+```bash
+python3 macos/bauen.py --pruefung build/pruefung      # → dist/…-macOS.zip (Voll- und Testversion)
+```
+
+`bauen.py` lädt Python 3.12 für macOS (conda-forge, `osx-arm64` und `osx-64`) und die Pakete als
+macOS-Wheels, signiert alle Programmdateien ad hoc mit `rcodesign` (wird bei Bedarf geladen) und
+prüft die Signaturen. Mit `--variante voll` oder `--variante test` wird nur ein Paket gebaut.
+
 ## Starten (Entwicklung)
 
 ```bash

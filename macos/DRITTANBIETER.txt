@@ -1,0 +1,33 @@
+MITGELIEFERTE KOMPONENTEN VON DRITTANBIETERN
+
+Dieses Programmpaket enthält die folgenden Komponenten. Sie stehen unter
+ihren eigenen Lizenzen; die Lizenztexte liegen jeweils im App-Bundle
+(Contents/Resources/python-*/lib/python3.12/LICENSE.txt bzw.
+…/site-packages/<Paket>.dist-info/).
+
+Laufzeit
+  Python 3.12 (Build von conda-forge) ........ Python Software Foundation License
+  OpenSSL, SQLite, zlib, libffi u. a. ........ jeweilige freie Lizenzen (conda-forge)
+
+Python-Pakete
+  Flask, Werkzeug, Jinja2, MarkupSafe,
+  itsdangerous, click, blinker ............... BSD-3-Clause
+  waitress ................................... Zope Public License 2.1
+  Pillow ..................................... MIT-CMU (HPND)
+  openpyxl, et_xmlfile ....................... MIT
+  reportlab .................................. BSD
+  lxml ....................................... BSD-3-Clause
+  saxonche (Saxon-HE) ........................ Mozilla Public License 2.0
+  cryptography (Lizenzprüfung) ............... Apache License 2.0 oder BSD-3-Clause
+  cffi, pycparser ............................ MIT bzw. BSD-3-Clause
+  sqlcipher3-wheels (Verschlüsselung,
+  enthält SQLCipher Community Edition) ...... zlib/libpng bzw. BSD-3-Clause
+
+Regelwerke der XRechnung-Prüfung (Ordner „pruefung“)
+  OASIS UBL 2.1 XML-Schemas .................. OASIS IPR Policy (frei verwendbar)
+  EN 16931 Validierungsartefakte (CEN) ....... European Union Public Licence (EUPL) 1.2
+  XRechnung Schematron (KoSIT) ............... Apache License 2.0
+  ISO Schematron Skeleton .................... MIT-artige Lizenz (Rick Jelliffe u. a.)
+
+Die Prüfung entspricht in ihren Stufen dem KoSIT-Validator (XSD, EN 16931,
+XRechnung), ist aber kein offizielles Produkt der KoSIT oder des CEN.

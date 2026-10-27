@@ -112,23 +112,33 @@ def aufraeumen(ziel: Path) -> None:
         p.unlink()
 
 
-def symbol(ziel: Path) -> None:
-    """Programmsymbol (Rechnungsblatt mit €) in mehreren Größen."""
+def symbol_bild(groesse: int = 256):
+    """Programmsymbol (Rechnungsblatt mit €) – auch für das macOS-Symbol (windows → macos/bauen.py)."""
     from PIL import Image, ImageDraw, ImageFont
 
-    gross = Image.new("RGBA", (256, 256), (0, 0, 0, 0))
+    f = groesse / 256
+
+    def s(*werte):
+        return tuple(round(w * f) for w in werte)
+
+    gross = Image.new("RGBA", (groesse, groesse), (0, 0, 0, 0))
     d = ImageDraw.Draw(gross)
-    d.rounded_rectangle((20, 8, 236, 248), radius=28, fill=(31, 111, 92, 255))
-    d.polygon([(176, 8), (236, 68), (176, 68)], fill=(23, 50, 43, 255))
+    d.rounded_rectangle(s(20, 8, 236, 248), radius=round(28 * f), fill=(31, 111, 92, 255))
+    d.polygon([s(176, 8), s(236, 68), s(176, 68)], fill=(23, 50, 43, 255))
     for i, breite in enumerate((120, 150, 100)):
-        d.rounded_rectangle((52, 92 + i * 34, 52 + breite, 106 + i * 34), radius=7, fill=(227, 240, 236, 255))
+        d.rounded_rectangle(s(52, 92 + i * 34, 52 + breite, 106 + i * 34), radius=round(7 * f), fill=(227, 240, 236, 255))
     try:
-        schrift = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 88)
+        schrift = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", round(88 * f))
     except OSError:
         schrift = ImageFont.load_default()
-    d.ellipse((128, 150, 236, 258), fill=(232, 163, 23, 255))
-    d.text((182, 206), "€", font=schrift, fill=(23, 50, 43, 255), anchor="mm")
-    gross.save(ziel, sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+    d.ellipse(s(128, 150, 236, 258), fill=(232, 163, 23, 255))
+    d.text(s(182, 206), "€", font=schrift, fill=(23, 50, 43, 255), anchor="mm")
+    return gross
+
+
+def symbol(ziel: Path) -> None:
+    """Programmsymbol in mehreren Größen (.ico)."""
+    symbol_bild(256).save(ziel, sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
 
 
 def lizenztext(ziel: Path) -> None:
