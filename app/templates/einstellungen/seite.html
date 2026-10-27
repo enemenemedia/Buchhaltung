@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block titel %}Einstellungen – X-Rechnung für KMU{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+  <div>
+    <h1>Einstellungen</h1>
+    <p class="untertitel">Lizenz und Schutz der Datenbank durch ein Passwort.</p>
+  </div>
+</div>
+
+<div class="spalten">
+  <section class="karte" id="lizenz">
+    <h2>Lizenz</h2>
+    {% if lizenz %}
+      <p class="zustand zustand-an">✓ {{ lizenz.typ_name }}</p>
+      <dl class="angaben abstand-oben">
+        <dt>Lizenznehmer</dt><dd>{{ lizenz.lizenznehmer }}</dd>
+        <dt>Seriennummer</dt><dd class="mono">{{ '%06d' % lizenz.seriennummer }}</dd>
+        <dt>Ausgestellt</dt><dd>{{ lizenz.ausgestellt.strftime('%d.%m.%Y') }}</dd>
+        <dt>Gültig bis</dt><dd>{{ lizenz.gueltig_bis.strftime('%d.%m.%Y') if lizenz.gueltig_bis else 'unbegrenzt' }}</dd>
+      </dl>
+      <details class="einstellungen-gruppe">
+        <summary>Andere Lizenznummer eingeben</summary>
+    {% else %}
+      <p class="zustand zustand-aus">Testversion</p>
+      <p>Alle Funktionen sind nutzbar. <strong>XRechnungen (XML) werden in der Testversion nicht erstellt</strong> –
+        abgeschlossene Rechnungen erhalten nur das PDF. Nach Eingabe einer gültigen Lizenznummer können Sie die
+        XRechnung zu diesen Rechnungen nachträglich erstellen.</p>
+      {% if lizenz_fehler %}<p class="meldung meldung-fehler">Die gespeicherte Lizenz ist nicht gültig: {{ lizenz_fehler }}</p>{% endif %}
+      <div class="einstellungen-gruppe">
+    {% endif %}
+        <form method="post" action="{{ url_for('einstellungen.lizenz_speichern') }}" class="formular-spalte">
+          <label class="feld {% if fehler.lizenz %}hat-fehler{% endif %}">
+            <span>Lizenznehmer <em>*</em></span>
+            <input name="lizenznehmer" required autocomplete="organization"
+                   value="{{ eingabe.get('lizenznehmer', gespeichert.lizenznehmer if gespeichert else '') }}">
+            <small>genau wie in der Lizenz-E-Mail</small>
+          </label>
+          <label class="feld {% if fehler.lizenz %}hat-fehler{% endif %}">
+            <span>Lizenznummer <em>*</em></span>
+            <textarea name="lizenznummer" class="lizenz-nummer" required spellcheck="false" autocomplete="off"
+                      placeholder="XRK1-…">{{ eingabe.get('lizenznummer', '') }}</textarea>
+            {% if fehler.lizenz %}<small class="fehlertext">{{ fehler.lizenz }}</small>{% else %}<small>am besten aus der E-Mail kopieren und einfügen</small>{% endif %}
+          </label>
+          <button class="knopf knopf-primaer" type="submit">Lizenz aktivieren</button>
+        </form>
+    {% if lizenz %}</details>{% else %}</div>{% endif %}
+  </section>
+
+  <section class="karte" id="verschluesselung">
+    <h2>Verschlüsselung der Datenbank</h2>
+    {% if not verfuegbar %}
+      <p class="zustand zustand-aus">Nicht verfügbar</p>
+      <p>Für die Verschlüsselung wird das Paket <span class="mono">sqlcipher3-wheels</span> benötigt.
+        Im Windows-Installationsprogramm ist es enthalten.</p>
+    {% elif verschluesselt %}
+      <p class="zustand zustand-an">🔒 Verschlüsselt (AES-256)</p>
+      <p>Beim Start fragt das Programm nach dem Passwort. Mit <strong>Sperren</strong> oben rechts sperren Sie die
+        Datenbank, wenn Sie den Platz verlassen.</p>
+
+      <details class="einstellungen-gruppe" {% if fehler.passwort %}open{% endif %}>
+        <summary>Passwort ändern</summary>
+        <form method="post" action="{{ url_for('einstellungen.passwort_aendern') }}" class="formular-spalte">
+          <label class="feld"><span>Bisheriges Passwort</span>
+            <input type="password" name="alt" required autocomplete="current-password"></label>
+          <label class="feld"><span>Neues Passwort</span>
+            <input type="password" name="passwort" required minlength="{{ passwort_min }}" autocomplete="new-password"></label>
+          <label class="feld {% if fehler.passwort %}hat-fehler{% endif %}"><span>Neues Passwort wiederholen</span>
+            <input type="password" name="passwort2" required minlength="{{ passwort_min }}" autocomplete="new-password">
+            {% if fehler.passwort %}<small class="fehlertext">{{ fehler.passwort }}</small>{% endif %}</label>
+          <button class="knopf knopf-primaer" type="submit">Passwort ändern</button>
+        </form>
+      </details>
+
+      <details class="einstellungen-gruppe" {% if fehler.entschluesseln %}open{% endif %}>
+        <summary>Verschlüsselung aufheben</summary>
+        <form method="post" action="{{ url_for('einstellungen.entschluesseln') }}" class="formular-spalte"
+              onsubmit="return confirm('Verschlüsselung wirklich aufheben? Die Datenbank ist danach ohne Passwort lesbar.')">
+          <label class="feld {% if fehler.entschluesseln %}hat-fehler{% endif %}"><span>Passwort</span>
+            <input type="password" name="passwort" required autocomplete="current-password">
+            {% if fehler.entschluesseln %}<small class="fehlertext">{{ fehler.entschluesseln }}</small>{% endif %}</label>
+          <button class="knopf knopf-gefahr-rand" type="submit">Verschlüsselung aufheben</button>
+        </form>
+      </details>
+    {% else %}
+      <p class="zustand zustand-aus">Nicht verschlüsselt</p>
+      <p>Schützen Sie Kunden-, Angebots- und Rechnungsdaten mit einem Passwort. Ohne das Passwort lässt sich die
+        Datenbank weder mit diesem Programm noch mit anderen Werkzeugen öffnen.</p>
+      <form method="post" action="{{ url_for('einstellungen.verschluesseln') }}" class="formular-spalte abstand-oben">
+        <label class="feld"><span>Passwort <em>*</em></span>
+          <input type="password" name="passwort" required minlength="{{ passwort_min }}" autocomplete="new-password">
+          <small>mindestens {{ passwort_min }} Zeichen</small></label>
+        <label class="feld {% if fehler.verschluesseln %}hat-fehler{% endif %}"><span>Passwort wiederholen <em>*</em></span>
+          <input type="password" name="passwort2" required minlength="{{ passwort_min }}" autocomplete="new-password">
+          {% if fehler.verschluesseln %}<small class="fehlertext">{{ fehler.verschluesseln }}</small>{% endif %}</label>
+        <div class="hinweisbox">
+          <strong>Wichtig:</strong>
+          <ul class="warnliste">
+            <li>Das Passwort wird nirgends gespeichert. <strong>Ohne Passwort sind die Daten verloren</strong> –
+              auch wir können sie nicht wiederherstellen. Notieren Sie es an einem sicheren Ort.</li>
+            <li>PDFs und XRechnungen in den Kundenordnern bleiben unverschlüsselt.</li>
+            <li>Ältere Sicherungskopien der Datenbank bleiben unverschlüsselt – bitte danach eine neue Sicherung anlegen.</li>
+          </ul>
+        </div>
+        <label class="feld schalter">
+          <input type="checkbox" name="verstanden" value="1" required>
+          <span>Ich habe das Passwort sicher notiert und weiß, dass es nicht wiederhergestellt werden kann.</span>
+        </label>
+        <button class="knopf knopf-primaer" type="submit">Datenbank verschlüsseln</button>
+      </form>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

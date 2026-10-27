@@ -5,6 +5,7 @@ from datetime import date
 from flask import (Blueprint, Response, abort, current_app, flash, redirect, render_template, request,
                    send_file, url_for)
 
+from .. import aktive_lizenz
 from .. import positionen as pos
 from ..db import get_db
 from ..leistungen import service as leistungen
@@ -154,10 +155,31 @@ def korrigieren(rechnung_id: int):
 @bp.post("/<int:rechnung_id>/abschliessen")
 def abschliessen(rechnung_id: int):
     r = _laden_oder_404(rechnung_id)
+    lizenziert = aktive_lizenz() is not None
     try:
-        xml, _pdf = service.abschliessen(get_db(), _verzeichnis(), rechnung_id)
-        flash(f"{service.ARTEN[r['art']]} abgeschlossen. XRechnung und PDF wurden als „{xml.stem}“ im "
-              "Rechnungsordner abgelegt.", "ok")
+        xml, _pdf = service.abschliessen(get_db(), _verzeichnis(), rechnung_id, mit_xml=lizenziert)
+        if lizenziert:
+            flash(f"{service.ARTEN[r['art']]} abgeschlossen. XRechnung und PDF wurden als „{xml.stem}“ im "
+                  "Rechnungsordner abgelegt.", "ok")
+        else:
+            flash(f"{service.ARTEN[r['art']]} abgeschlossen. Das PDF wurde als „{xml.stem}.pdf“ im Rechnungsordner "
+                  "abgelegt. Testversion: Die XRechnung (XML) wurde nicht erstellt – nach Eingabe einer "
+                  "Lizenznummer können Sie sie hier nachträglich erstellen.", "ok")
+    except RechnungsFehler as e:
+        flash(str(e), "fehler")
+    return redirect(url_for("rechnungen.detail", rechnung_id=rechnung_id))
+
+
+@bp.post("/<int:rechnung_id>/xrechnung-erstellen")
+def xml_nachholen(rechnung_id: int):
+    _laden_oder_404(rechnung_id)
+    if aktive_lizenz() is None:
+        flash("In der Testversion werden keine XRechnungen erstellt. Bitte zuerst eine Lizenznummer eingeben.",
+              "fehler")
+        return redirect(url_for("einstellungen.seite") + "#lizenz")
+    try:
+        pfad = service.xml_nachholen(get_db(), _verzeichnis(), rechnung_id)
+        flash(f"XRechnung erstellt und als „{pfad.name}“ im Rechnungsordner abgelegt.", "ok")
     except RechnungsFehler as e:
         flash(str(e), "fehler")
     return redirect(url_for("rechnungen.detail", rechnung_id=rechnung_id))

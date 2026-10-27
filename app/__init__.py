@@ -1,6 +1,6 @@
 """X-Rechnung für KMU – Flask-Anwendung."""
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 import os
 import secrets
@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 
 from flask import Flask, abort, flash, jsonify, redirect, request, url_for
 
-from . import db
+from . import db, lizenz
 
 
 APP_KENNUNG = "xrechnung-kmu"
@@ -36,10 +36,18 @@ def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None) -> F
         MAX_CONTENT_LENGTH=6 * 1024 * 1024,
     )
 
-    db.initialisieren(app.config["DATENBANK"])
+    # Verschlüsselte Datenbank: bis zur Eingabe des Passworts gesperrt (Passwort nur im Speicher)
+    app.config["DB_PASSWORT"] = None
+    app.config["GESPERRT"] = db.ist_verschluesselt(app.config["DATENBANK"])
+    if not app.config["GESPERRT"]:
+        db.initialisieren(app.config["DATENBANK"])
     app.teardown_appcontext(db.schliessen)
 
+    # Lizenz aus dem Datenordner; ohne gültige Lizenz läuft das Programm als Testversion
+    app.config["LIZENZ"], app.config["LIZENZ_FEHLER"] = lizenz.laden(daten)
+
     from .angebote import bp as angebote_bp
+    from .einstellungen import bp as einstellungen_bp
     from .kunden import bp as kunden_bp
     from .leistungen import bp as leistungen_bp
     from .rechnungen import bp as rechnungen_bp
@@ -49,6 +57,17 @@ def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None) -> F
     app.register_blueprint(leistungen_bp)
     app.register_blueprint(angebote_bp)
     app.register_blueprint(rechnungen_bp)
+    app.register_blueprint(einstellungen_bp)
+
+    # Solange die Datenbank gesperrt ist, führt jede Seite zur Passworteingabe
+    FREI_GESPERRT = {"static", "kennung", "system_beenden", "einstellungen.entsperren"}
+
+    @app.before_request
+    def _sperre():
+        if app.config["GESPERRT"] and request.endpoint not in FREI_GESPERRT:
+            weiter = request.full_path if request.method == "GET" else "/"
+            return redirect(url_for("einstellungen.entsperren", weiter=weiter.rstrip("?")))
+        return None
 
     @app.errorhandler(413)
     def zu_gross(_e):
@@ -71,7 +90,8 @@ def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None) -> F
     @app.context_processor
     def _programm():
         return {"PROGRAMM_VERSION": __version__, "DESKTOP": beenden is not None,
-                "DATENORDNER": str(app.config["DATENVERZEICHNIS"])}
+                "DATENORDNER": str(app.config["DATENVERZEICHNIS"]), "LIZENZ": aktive_lizenz(app),
+                "VERSCHLUESSELT": app.config["DB_PASSWORT"] is not None, "GESPERRT": app.config["GESPERRT"]}
 
     @app.get("/system/kennung")
     def kennung():
@@ -100,3 +120,11 @@ def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None) -> F
         return redirect(url_for("kunden.liste"))
 
     return app
+
+
+def aktive_lizenz(app: Flask | None = None) -> "lizenz.Lizenz | None":
+    """Gültige Lizenz oder None (= Testversion: XRechnung wird nicht erstellt)."""
+    from flask import current_app
+
+    l = (app or current_app).config.get("LIZENZ")
+    return l if l is not None and l.gueltig() else None

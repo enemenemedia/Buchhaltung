@@ -16,16 +16,30 @@
         <a href="{{ url_for('leistungen.liste') }}" class="{% if request.blueprint == 'leistungen' %}aktiv{% endif %}">Leistungen</a>
         <a href="{{ url_for('angebote.liste') }}" class="{% if request.blueprint == 'angebote' %}aktiv{% endif %}">Angebote</a>
         <a href="{{ url_for('rechnungen.liste') }}" class="{% if request.blueprint == 'rechnungen' %}aktiv{% endif %}">Rechnungen</a>
+        <a href="{{ url_for('einstellungen.seite') }}" class="{% if request.blueprint == 'einstellungen' %}aktiv{% endif %}">Einstellungen</a>
       </nav>
-      {% if DESKTOP %}
-      <form method="post" action="{{ url_for('system_beenden') }}" class="beenden-form"
-            onsubmit="return confirm('X-Rechnung für KMU beenden?')">
-        <button type="submit" class="beenden-knopf" title="Programm beenden">Beenden</button>
-      </form>
-      {% endif %}
+      <div class="kopf-rechts">
+        {% if VERSCHLUESSELT %}
+        <form method="post" action="{{ url_for('einstellungen.sperren') }}">
+          <button type="submit" class="beenden-knopf" title="Datenbank sperren – zum Weiterarbeiten ist das Passwort nötig">🔒 Sperren</button>
+        </form>
+        {% endif %}
+        {% if DESKTOP %}
+        <form method="post" action="{{ url_for('system_beenden') }}"
+              onsubmit="return confirm('X-Rechnung für KMU beenden?')">
+          <button type="submit" class="beenden-knopf" title="Programm beenden">Beenden</button>
+        </form>
+        {% endif %}
+      </div>
     </div>
   </header>
 
+  {% if not LIZENZ %}
+  <div class="testlizenz-band" role="note">
+    <strong>Testversion</strong> – alle Funktionen sind nutzbar, XRechnungen (XML) werden jedoch nicht erstellt.
+    <a href="{{ url_for('einstellungen.seite') }}#lizenz">Lizenznummer eingeben</a>
+  </div>
+  {% endif %}
   <main class="inhalt">
     {% with meldungen = get_flashed_messages(with_categories=true) %}
       {% for art, text in meldungen %}
@@ -35,7 +49,8 @@
     {% block inhalt %}{% endblock %}
   </main>
   <footer class="fuss">
-    <span>X-Rechnung für KMU {{ PROGRAMM_VERSION }}</span>
+    <span>X-Rechnung für KMU {{ PROGRAMM_VERSION }} ·
+      {% if LIZENZ %}lizenziert für {{ LIZENZ.lizenznehmer }}{% else %}Testversion{% endif %}</span>
     <span>Datenordner: <span class="mono">{{ DATENORDNER }}</span></span>
   </footer>
   {% block skripte %}{% endblock %}

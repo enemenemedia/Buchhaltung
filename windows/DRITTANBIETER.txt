@@ -18,6 +18,10 @@ Python-Pakete
   reportlab .................................. BSD
   lxml ....................................... BSD-3-Clause
   saxonche (Saxon-HE) ........................ Mozilla Public License 2.0
+  cryptography (Lizenzprüfung) ............... Apache License 2.0 oder BSD-3-Clause
+  cffi, pycparser ............................ MIT bzw. BSD-3-Clause
+  sqlcipher3-wheels (Verschlüsselung,
+  enthält SQLCipher Community Edition) ...... zlib/libpng bzw. BSD-3-Clause
 
 Regelwerke der XRechnung-Prüfung (Ordner „pruefung“)
   OASIS UBL 2.1 XML-Schemas .................. OASIS IPR Policy (frei verwendbar)

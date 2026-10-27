@@ -13,6 +13,9 @@ Aufbau des Installationsordners:
   pruefung\\       Regelwerke für die XRechnung-Prüfung (XSD, EN 16931, KoSIT)
   starter.py      diese Datei
   einstellungen.ini   vom Installer geschrieben (Datenordner)
+
+Der Installer ruft den Starter außerdem mit --lizenz-pruefen <ini> auf, um die eingegebene
+Lizenznummer zu prüfen, bevor er etwas installiert (Rückgabewert 0 = gültig).
 """
 
 from __future__ import annotations
@@ -199,9 +202,34 @@ def laufende_beenden() -> int:
     return 0
 
 
+def lizenz_pruefen(ini: str) -> int:
+    """Für den Installer: prüft Lizenznehmer/Lizenznummer aus der INI-Datei.
+
+    Gültig: schreibt die Lizenz in einheitlicher Form zurück, Rückgabe 0.
+    Ungültig: schreibt den Grund als „fehler“ in die Datei, Rückgabe 2."""
+    from app import lizenz
+
+    pfad = Path(ini)
+    name, nummer = lizenz.datei_lesen(pfad)
+    try:
+        l = lizenz.pruefen(name, nummer)
+    except lizenz.LizenzFehler as e:
+        cfg = configparser.ConfigParser(interpolation=None)
+        cfg["Lizenz"] = {"lizenznehmer": name, "lizenznummer": nummer, "fehler": str(e)}
+        with pfad.open("w", encoding="utf-8") as f:
+            cfg.write(f)
+        return 2
+    lizenz.speichern(pfad.parent, l)
+    if pfad.name != lizenz.DATEI:
+        (pfad.parent / lizenz.DATEI).replace(pfad)
+    return 0
+
+
 def main(argv: list[str]) -> int:
     if "--beenden" in argv:
         return laufende_beenden()
+    if "--lizenz-pruefen" in argv:
+        return lizenz_pruefen(argv[argv.index("--lizenz-pruefen") + 1])
     ohne_browser = "--ohne-browser" in argv
     daten = datenordner()
     try:

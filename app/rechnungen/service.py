@@ -625,9 +625,13 @@ def _xml_pruefen(xml: bytes) -> None:
         raise RechnungsFehler(f"Die erzeugte XRechnung ist nicht gültig: {meldungen}")
 
 
-def abschliessen(con: sqlite3.Connection, datenverzeichnis: Path, rechnung_id: int) -> tuple[Path, Path]:
+def abschliessen(con: sqlite3.Connection, datenverzeichnis: Path, rechnung_id: int, *,
+                 mit_xml: bool = True) -> tuple[Path, Path]:
     """Vergibt die Rechnungsnummer, erzeugt XRechnung (XML) und PDF und legt beide
-    gleichnamig im Rechnungsordner des Kunden ab. Danach ist die Rechnung unveränderlich."""
+    gleichnamig im Rechnungsordner des Kunden ab. Danach ist die Rechnung unveränderlich.
+
+    mit_xml=False (Testversion): Die XRechnung wird erzeugt und geprüft, aber nicht abgelegt;
+    nur das PDF entsteht. Mit einer Lizenz lässt sie sich über xml_nachholen() erstellen."""
     from . import dokument, xrechnung
 
     r = laden(con, rechnung_id)
@@ -674,6 +678,7 @@ def abschliessen(con: sqlite3.Connection, datenverzeichnis: Path, rechnung_id: i
     # Anzeige, PDF und gespeicherte Summen beim Storno negativ.
     xml = xrechnung.erzeugen(kopf, pos_liste, verkaeufer, kaeufer, art=art, bezug=bezug)
     _xml_pruefen(xml)
+    ausstehend = None if mit_xml else json.dumps({"bezug_bezahlt": bool(bezug and bezug["bezahlt"])})
     anzeige = anzeige_positionen(r, pos_liste)
     s = berechnung.berechnen(anzeige, klein, "netto")
     kopf["summe_gesamt"] = zahlen.speicherform(s.gesamt)
@@ -689,19 +694,21 @@ def abschliessen(con: sqlite3.Connection, datenverzeichnis: Path, rechnung_id: i
             con.execute(
                 "UPDATE rechnungen SET nummer = ?, status = 'offen', kleinunternehmer = ?, kaeufer_referenz = ?, "
                 "empfaenger = ?, verkaeufer = ?, kaeufer = ?, summe_netto = ?, summe_ust = ?, summe_gesamt = ?, "
-                "vorausbezahlt = ?, dateiname = ?, abgeschlossen_am = ?, geaendert_am = ? "
+                "vorausbezahlt = ?, dateiname = ?, abgeschlossen_am = ?, geaendert_am = ?, xml_ausstehend = ? "
                 "WHERE id = ? AND status = 'entwurf'",
                 (nummer, int(klein), kopf["kaeufer_referenz"], kopf["empfaenger"],
                  json.dumps(verkaeufer, ensure_ascii=False), json.dumps(kaeufer, ensure_ascii=False),
                  zahlen.speicherform(s.netto), zahlen.speicherform(s.ust), zahlen.speicherform(s.gesamt),
-                 zahlen.speicherform(vorausbezahlt), relativ.as_posix(), jetzt, jetzt, rechnung_id))
+                 zahlen.speicherform(vorausbezahlt), relativ.as_posix(), jetzt, jetzt, ausstehend, rechnung_id))
             if neuer_status == "bezahlt":
                 con.execute("UPDATE rechnungen SET status = 'bezahlt', bezahlt_am = ? WHERE id = ?",
                             (r["rechnungsdatum"], rechnung_id))
-            xml_pfad.write_bytes(xml)
+            if mit_xml:
+                xml_pfad.write_bytes(xml)
             pdf_pfad.write_bytes(pdf)
             hinweise = [f"Rechnungsnummer {nummer} vergeben" if art == "rechnung" else f"Nummer {nummer} vergeben",
-                        f"XRechnung abgelegt: {relativ.as_posix()}.xml", f"PDF abgelegt: {relativ.as_posix()}.pdf"]
+                        f"XRechnung abgelegt: {relativ.as_posix()}.xml" if mit_xml
+                        else "XRechnung nicht erstellt (Testversion)", f"PDF abgelegt: {relativ.as_posix()}.pdf"]
             if art == "storno":
                 hinweise.append(f"Gutschrift {zahlen.geld(s.gesamt)} – "
                                 + ("Erstattung offen" if bezug["bezahlt"] else "mit der Originalrechnung verrechnet"))
@@ -723,6 +730,44 @@ def abschliessen(con: sqlite3.Connection, datenverzeichnis: Path, rechnung_id: i
         pdf_pfad.unlink(missing_ok=True)
         raise
     return xml_pfad, pdf_pfad
+
+
+def xml_nachholen(con: sqlite3.Connection, datenverzeichnis: Path, rechnung_id: int) -> Path:
+    """Erstellt die XRechnung zu einem in der Testversion abgeschlossenen Beleg – aus den beim
+    Abschluss eingefrorenen Angaben (Verkäufer, Käufer, Positionen, Beträge), also mit genau dem
+    Inhalt, den sie beim Abschließen gehabt hätte."""
+    from . import xrechnung
+
+    r = laden(con, rechnung_id)
+    if r["status"] == "entwurf" or not r["xml_ausstehend"]:
+        raise RechnungsFehler("Zu diesem Beleg ist keine XRechnung ausstehend.")
+    pfad = dateien(datenverzeichnis, r).get("xml")
+    if pfad is None:
+        raise RechnungsFehler("Der Ablageort des Belegs ist unbekannt.")
+    if pfad.exists():
+        raise RechnungsFehler(f"Die Datei {pfad.name} existiert bereits.")
+    angaben = json.loads(r["xml_ausstehend"])
+    verkaeufer, kaeufer = json.loads(r["verkaeufer"]), json.loads(r["kaeufer"])
+    bezug = None
+    if r["art"] != "rechnung":
+        original = laden(con, r["bezug_id"])
+        bezug = {"id": original["id"], "nummer": original["nummer"], "datum": original["rechnungsdatum"],
+                 "bezahlt": bool(angaben.get("bezug_bezahlt"))}
+    kopf = {**dict(r), "kaeufer_ust_id": kaeufer.get("ust_id")}
+    xml = xrechnung.erzeugen(kopf, [dict(p) for p in positionen(con, rechnung_id)], verkaeufer, kaeufer,
+                             art=r["art"], bezug=bezug)
+    _xml_pruefen(xml)
+    pfad.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with con:
+            con.execute("UPDATE rechnungen SET xml_ausstehend = NULL WHERE id = ?", (rechnung_id,))
+            pfad.write_bytes(xml)
+            protokoll.schreiben(con, BEREICH, rechnung_id, "xrechnung",
+                                {"hinweise": [f"XRechnung nachträglich erstellt: {r['dateiname']}.xml"]})
+    except Exception:
+        pfad.unlink(missing_ok=True)
+        raise
+    return pfad
 
 
 def vorschau_pdf(con: sqlite3.Connection, datenverzeichnis: Path, rechnung_id: int) -> bytes:

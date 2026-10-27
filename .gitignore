@@ -8,3 +8,6 @@ venv/
 # Build-Ergebnisse des Windows-Installers
 /build/
 /dist/
+# Privater Schlüssel und Register der Lizenzen – niemals ins Repository
+*.pem
+lizenzen.csv

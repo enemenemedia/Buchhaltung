@@ -15,11 +15,28 @@ die Bedienung erfolgt im Browser.
 | Rechnungen mit XRechnung (XML) + PDF | ✅ fertig |
 | Stornorechnungen und Rechnungskorrekturen | ✅ fertig |
 | Windows-Installationsprogramm | ✅ fertig |
+| Lizenzprüfung und Testversion | ✅ fertig |
+| Verschlüsselung der Datenbank mit Passwort | ✅ fertig |
 
 ## Installation unter Windows
 
-`X-Rechnung-fuer-KMU-Setup-<Version>.exe` ausführen – Python und alle Komponenten
-(inklusive XRechnung-Prüfung) sind enthalten, Administratorrechte sind nicht nötig.
+Es gibt zwei Setup-Dateien – Python und alle Komponenten (inklusive XRechnung-Prüfung) sind
+jeweils enthalten, Administratorrechte sind nicht nötig:
+
+| | Vollversion | Testversion |
+|---|---|---|
+| Datei | `X-Rechnung-fuer-KMU-Setup-<Version>.exe` | `X-Rechnung-fuer-KMU-Testversion-Setup-<Version>.exe` |
+| Installation | nur mit gültiger Lizenznummer | ohne Lizenznummer |
+| XRechnung (XML) | ✅ | ❌ – Hinweis „Testversion“ im Programm |
+| alles andere | ✅ | ✅ |
+
+- **Vollversion:** Der Installer fragt Lizenznehmer und Lizenznummer ab. Er entpackt die
+  Programmdateien zunächst in einen Zwischenordner und prüft die Lizenz mit dem mitgelieferten
+  Python. Ist sie ungültig, wird nichts installiert und eine vorhandene Installation bleibt
+  unverändert. Bei einer Aktualisierung wird die vorhandene Lizenz vorgeschlagen.
+  Unbeaufsichtigt: `Setup.exe /S /LIZENZNEHMER="Firma GmbH" /LIZENZNUMMER=XRK1-…`
+- **Testversion:** Eine Lizenznummer kann jederzeit im Programm unter **Einstellungen → Lizenz**
+  eingegeben werden – ohne Neuinstallation und ohne Datenverlust.
 
 - **Programmordner:** `%LOCALAPPDATA%\Programs\X-Rechnung für KMU` (änderbar)
 - **Datenordner:** `Dokumente\X-Rechnung` (im Installer änderbar; darf nicht im Programmordner liegen)
@@ -31,6 +48,7 @@ die Bedienung erfolgt im Browser.
 - **Deinstallation** (Startmenü oder „Apps & Features“) entfernt nur das Programm. Die Daten bleiben
   wegen der gesetzlichen Aufbewahrungsfristen erhalten.
 - Protokoll für die Fehlersuche: `<Datenordner>\protokoll\programm.log`
+- Die Lizenz liegt als `lizenz.ini` im Datenordner und bleibt bei Deinstallation und Update erhalten.
 - Die Setup-Datei ist nicht signiert. Windows SmartScreen meldet daher „Der Computer wurde durch
   Windows geschützt“; weiter über „Weitere Informationen“ → „Trotzdem ausführen“.
 
@@ -41,8 +59,10 @@ Der Installer wird unter Linux gebaut (kein Windows nötig):
 ```bash
 sudo apt install nsis
 python3 werkzeuge/pruefung_einrichten.py build/pruefung         # Prüfartefakte (optional)
-python3 windows/bauen.py --pruefung build/pruefung                # → dist/X-Rechnung-fuer-KMU-Setup-<Version>.exe
+python3 windows/bauen.py --pruefung build/pruefung                # → dist/…-Setup-<Version>.exe und …-Testversion-Setup-<Version>.exe
 ```
+
+Mit `--variante voll` oder `--variante test` wird nur eine der beiden Setup-Dateien gebaut.
 
 `bauen.py` lädt Python 3.12 für Windows (conda-forge, per micromamba) und die Pakete als
 Windows-Wheels von PyPI. Danach fügt es Anwendung, Starter (`windows/starter.py`) und Prüfregeln hinzu
@@ -75,6 +95,57 @@ daten/
         │                         2026-10-26_KR-2026-0001_K00001_korrektur_zu_RE-2026-0002.xml + .pdf
         └── dokumente/
 ```
+
+## Lizenz und Testversion
+
+- **Lizenznummer** – eine digitale Signatur (Ed25519) über den Lizenznehmer, eine Seriennummer,
+  das Ausstellungsdatum und ein optionales Ablaufdatum, z. B. `XRK1-AEAQA-AAAAE-…`.
+  Das Programm enthält nur den öffentlichen Schlüssel und prüft offline – gültige Nummern
+  erzeugen kann nur, wer den privaten Schlüssel hat. Der Lizenznehmer erscheint in der Fußzeile.
+- **Prüfung** im Vollversions-Installer (vor der Installation) und bei jedem Programmstart.
+- **Ohne gültige Lizenz** (Testversion, abgelaufene oder fehlende Lizenz) läuft das Programm als
+  Testversion: Ein Band oben weist darauf hin, alles ist nutzbar, nur die **XRechnung (XML) wird
+  nicht erstellt**. Beim Abschließen einer Rechnung entsteht das PDF; die Rechnung wird als
+  „XRechnung ausstehend“ markiert. Die Daten bleiben immer zugänglich (Aufbewahrungspflicht).
+- **Nach dem Lizenzieren** lässt sich die XRechnung zu diesen Rechnungen mit
+  „XRechnung jetzt erstellen“ nachholen – aus den beim Abschluss eingefrorenen Angaben, also
+  inhaltlich genau so, wie sie beim Abschließen entstanden wäre.
+
+### Lizenzen ausstellen (nur für den Hersteller)
+
+```bash
+pip install cryptography
+# einmalig: Schlüsselpaar erzeugen – trägt den öffentlichen Schlüssel in app/lizenz.py ein
+python werkzeuge/lizenz_erzeugen.py schluessel --privat ~/xrechnung-lizenz/lizenz-privat.pem
+# Lizenz für einen Kunden (Seriennummer fortlaufend, optional --bis 2027-12-31)
+python werkzeuge/lizenz_erzeugen.py erzeugen --privat ~/xrechnung-lizenz/lizenz-privat.pem --name "Firma GmbH"
+# Lizenz prüfen
+python werkzeuge/lizenz_erzeugen.py pruefen --name "Firma GmbH" --nummer XRK1-…
+```
+
+Alle ausgestellten Lizenzen werden in `lizenzen.csv` neben dem privaten Schlüssel protokolliert.
+Der private Schlüssel gehört **nicht** ins Repository (`.gitignore` schließt `*.pem` aus) und nicht
+in den Installer. Ein neues Schlüsselpaar macht alle bisher ausgegebenen Lizenznummern ungültig.
+
+Hinweis: Das Programm liegt als Python-Quelltext vor. Wer gezielt den Programmcode verändert, kann
+jede lokale Lizenzprüfung umgehen – die Prüfung schützt vor einfacher Weitergabe, nicht vor
+Manipulation.
+
+## Verschlüsselung der Datenbank
+
+Unter **Einstellungen → Verschlüsselung der Datenbank** kann die Datenbank mit einem selbst gewählten
+Passwort (mindestens 8 Zeichen) verschlüsselt werden.
+
+- **SQLCipher** (AES-256, Schlüssel per PBKDF2-HMAC-SHA512 aus dem Passwort abgeleitet). Ohne
+  Passwort lässt sich die Datei weder mit diesem Programm noch mit anderen SQLite-Werkzeugen öffnen.
+- **Beim Start** fragt das Programm nach dem Passwort; bis dahin führt jede Seite zur Passworteingabe.
+  Das Passwort wird nicht gespeichert, nur im Arbeitsspeicher gehalten, solange das Programm läuft.
+  **Sperren** (oben rechts) sperrt sofort, z. B. beim Verlassen des Arbeitsplatzes.
+- **Passwort ändern** und **Verschlüsselung aufheben** sind jederzeit möglich (mit dem bisherigen Passwort).
+- Die Datenbank wird dabei vollständig in eine neue Datei geschrieben, geprüft und erst dann ersetzt –
+  bei einem Fehler bleibt die bisherige Datei unverändert. Schutz-Trigger und Fremdschlüssel bleiben erhalten.
+- **Ohne Passwort sind die Daten verloren** – es gibt keine Wiederherstellung.
+- PDFs und XRechnungen in den Kundenordnern sowie ältere Sicherungskopien bleiben unverschlüsselt.
 
 ## Kundenverwaltung
 

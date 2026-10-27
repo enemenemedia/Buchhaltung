@@ -35,7 +35,8 @@ def con(app):
 
 
 @pytest.fixture
-def client(app, con):
+def client(app, con, lizenzieren):
+    lizenzieren(app)
     return app.test_client()
 
 

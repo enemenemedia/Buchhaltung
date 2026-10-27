@@ -1,6 +1,13 @@
 ; Installer für „X-Rechnung für KMU“ (NSIS 3, Unicode)
 ; Gebaut von windows/bauen.py – Aufruf von Hand:
-;   makensis -DVERSION=1.0.0 -DINHALT=<inhalt> -DAUSGABE=<dist> -DLIZENZ=<lizenz.txt> -DGROESSE_KB=<kb> installer.nsi
+;   makensis -DVERSION=1.0.0 -DINHALT=<inhalt> -DAUSGABE=<dist> -DLIZENZ=<lizenz.txt> -DGROESSE_KB=<kb> [-DTESTVERSION] installer.nsi
+;
+; Zwei Varianten aus demselben Skript:
+; - Vollversion: installiert nur mit gültiger Lizenznummer. Die Nummer wird nach dem Entpacken
+;   (in einen Zwischenordner) vom mitgelieferten Python geprüft; erst danach wird etwas installiert.
+;   Ist sie ungültig, bleibt eine vorhandene Installation unverändert.
+; - Testversion (-DTESTVERSION): ohne Lizenznummer; das Programm erstellt keine XRechnung (XML).
+;   Eine Lizenznummer kann später im Programm unter „Einstellungen“ eingegeben werden.
 ;
 ; - Installation ohne Administratorrechte für den angemeldeten Benutzer
 ; - Programmordner: %LOCALAPPDATA%\Programs\X-Rechnung für KMU (änderbar)
@@ -14,15 +21,22 @@ ManifestDPIAware true
 
 !define NAME "X-Rechnung für KMU"
 !define FIRMA "Ene Mene Media"
+!ifdef TESTVERSION
+  !define VARIANTE " (Testversion)"
+  !define DATEINAME "X-Rechnung-fuer-KMU-Testversion-Setup-${VERSION}.exe"
+!else
+  !define VARIANTE ""
+  !define DATEINAME "X-Rechnung-fuer-KMU-Setup-${VERSION}.exe"
+!endif
 !define REGKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\XRechnungKMU"
 !define EINSTELLUNGEN "$INSTDIR\einstellungen.ini"
 
-Name "${NAME}"
-OutFile "${AUSGABE}\X-Rechnung-fuer-KMU-Setup-${VERSION}.exe"
+Name "${NAME}${VARIANTE}"
+OutFile "${AUSGABE}\${DATEINAME}"
 InstallDir "$LOCALAPPDATA\Programs\${NAME}"
 InstallDirRegKey HKCU "${REGKEY}" "InstallLocation"
 RequestExecutionLevel user
-BrandingText "${NAME} ${VERSION}"
+BrandingText "${NAME} ${VERSION}${VARIANTE}"
 
 VIProductVersion "${VERSION}.0"
 VIAddVersionKey /LANG=1031 "ProductName" "${NAME}"
@@ -33,18 +47,29 @@ VIAddVersionKey /LANG=1031 "CompanyName" "${FIRMA}"
 VIAddVersionKey /LANG=1031 "LegalCopyright" "MIT-Lizenz"
 
 Var DATEN
+!ifndef TESTVERSION
+Var LizenzName
+Var LizenzNummer
+Var FeldName
+Var FeldNummer
+!endif
 
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
 !include "FileFunc.nsh"
+!include "nsDialogs.nsh"
 
 !define MUI_ICON "${INHALT}\xrechnung.ico"
 !define MUI_UNICON "${INHALT}\xrechnung.ico"
 !define MUI_ABORTWARNING
 
 ; --- Seiten -----------------------------------------------------------------------
-!define MUI_WELCOMEPAGE_TITLE "Willkommen bei ${NAME} ${VERSION}"
-!define MUI_WELCOMEPAGE_TEXT "Dieser Assistent installiert ${NAME} – Kunden, Leistungen, Angebote und Rechnungen mit XRechnung und PDF.$\r$\n$\r$\nDie Installation benötigt keine Administratorrechte. Python und alle benötigten Komponenten sind enthalten.$\r$\n$\r$\nKlicken Sie auf „Weiter“, um fortzufahren."
+!define MUI_WELCOMEPAGE_TITLE "Willkommen bei ${NAME} ${VERSION}${VARIANTE}"
+!ifdef TESTVERSION
+!define MUI_WELCOMEPAGE_TEXT "Dieser Assistent installiert die Testversion von ${NAME} – Kunden, Leistungen, Angebote und Rechnungen mit PDF.$\r$\n$\r$\nIn der Testversion sind alle Funktionen nutzbar, XRechnungen (XML) werden jedoch nicht erstellt. Mit einer Lizenznummer (im Programm unter „Einstellungen“) wird daraus die Vollversion – ohne Neuinstallation und ohne Datenverlust.$\r$\n$\r$\nDie Installation benötigt keine Administratorrechte."
+!else
+!define MUI_WELCOMEPAGE_TEXT "Dieser Assistent installiert ${NAME} – Kunden, Leistungen, Angebote und Rechnungen mit XRechnung und PDF.$\r$\n$\r$\nFür die Installation benötigen Sie Ihre Lizenznummer. Die Installation benötigt keine Administratorrechte. Python und alle benötigten Komponenten sind enthalten.$\r$\n$\r$\nKlicken Sie auf „Weiter“, um fortzufahren."
+!endif
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "${LIZENZ}"
 
@@ -61,9 +86,13 @@ Var DATEN
 !define MUI_PAGE_CUSTOMFUNCTION_LEAVE DatenordnerPruefen
 !insertmacro MUI_PAGE_DIRECTORY
 
+!ifndef TESTVERSION
+Page custom LizenzSeite LizenzSeiteVerlassen
+!endif
+
 !insertmacro MUI_PAGE_INSTFILES
 
-!define MUI_FINISHPAGE_TITLE "${NAME} ist installiert"
+!define MUI_FINISHPAGE_TITLE "${NAME}${VARIANTE} ist installiert"
 !define MUI_FINISHPAGE_TEXT "Das Programm startet im Browser. Sie finden es im Startmenü und auf dem Desktop.$\r$\n$\r$\nDatenordner:$\r$\n$DATEN"
 !define MUI_FINISHPAGE_RUN
 !define MUI_FINISHPAGE_RUN_FUNCTION ProgrammStarten
@@ -77,12 +106,91 @@ Var DATEN
 
 ; --- Funktionen ---------------------------------------------------------------------
 Function .onInit
+  InitPluginsDir
   ; Bisherigen Datenordner übernehmen (Update), sonst Dokumente\X-Rechnung
   ReadINIStr $DATEN "${EINSTELLUNGEN}" "X-Rechnung" "datenordner"
   ${If} $DATEN == ""
     StrCpy $DATEN "$DOCUMENTS\X-Rechnung"
   ${EndIf}
+!ifndef TESTVERSION
+  ; Unbeaufsichtigte Installation:  Setup.exe /S /LIZENZNEHMER=Firma /LIZENZNUMMER=XRK1-…
+  ${GetParameters} $0
+  ClearErrors
+  ${GetOptions} $0 "/LIZENZNEHMER=" $1
+  ${IfNot} ${Errors}
+    StrCpy $LizenzName $1
+  ${EndIf}
+  ClearErrors
+  ${GetOptions} $0 "/LIZENZNUMMER=" $1
+  ${IfNot} ${Errors}
+    StrCpy $LizenzNummer $1
+  ${EndIf}
+  ${If} ${Silent}
+  ${AndIf} $LizenzNummer == ""
+    ReadINIStr $LizenzName "$DATEN\lizenz.ini" "Lizenz" "lizenznehmer"
+    ReadINIStr $LizenzNummer "$DATEN\lizenz.ini" "Lizenz" "lizenznummer"
+  ${EndIf}
+!endif
 FunctionEnd
+
+!ifndef TESTVERSION
+Function LizenzSeite
+  !insertmacro MUI_HEADER_TEXT "Lizenz" "Bitte geben Sie Ihre Lizenz ein."
+  ; Bei einer Aktualisierung die vorhandene Lizenz aus dem Datenordner vorschlagen
+  ${If} $LizenzNummer == ""
+    ReadINIStr $LizenzName "$DATEN\lizenz.ini" "Lizenz" "lizenznehmer"
+    ReadINIStr $LizenzNummer "$DATEN\lizenz.ini" "Lizenz" "lizenznummer"
+  ${EndIf}
+  nsDialogs::Create 1018
+  Pop $0
+  ${If} $0 == error
+    Abort
+  ${EndIf}
+  ${NSD_CreateLabel} 0 0 100% 24u "Lizenznehmer und Lizenznummer finden Sie in Ihrer Lizenz-E-Mail. Am besten kopieren und einfügen."
+  Pop $0
+  ${NSD_CreateLabel} 0 30u 100% 10u "Lizenznehmer (genau wie in der E-Mail):"
+  Pop $0
+  ${NSD_CreateText} 0 42u 100% 13u "$LizenzName"
+  Pop $FeldName
+  ${NSD_CreateLabel} 0 64u 100% 10u "Lizenznummer (beginnt mit XRK1-):"
+  Pop $0
+  nsDialogs::CreateControl EDIT ${DEFAULT_STYLES}|${WS_TABSTOP}|${ES_MULTILINE}|${ES_AUTOVSCROLL}|${ES_WANTRETURN} ${WS_EX_CLIENTEDGE} 0 76u 100% 36u "$LizenzNummer"
+  Pop $FeldNummer
+  ${NSD_CreateLabel} 0 118u 100% 20u "Ohne Lizenznummer können Sie die Testversion installieren (eigene Setup-Datei)."
+  Pop $0
+  nsDialogs::Show
+FunctionEnd
+
+Function LizenzSeiteVerlassen
+  ${NSD_GetText} $FeldName $LizenzName
+  ${NSD_GetText} $FeldNummer $LizenzNummer
+  ${If} $LizenzName == ""
+    MessageBox MB_ICONEXCLAMATION|MB_OK "Bitte den Lizenznehmer eingeben."
+    Abort
+  ${EndIf}
+  ; Leerzeichen und Zeilenumbrüche am Anfang sind beim Kopieren häufig
+  StrCpy $0 0
+  ${Do}
+    StrCpy $1 $LizenzNummer 1 $0
+    ${If} $1 == " "
+    ${OrIf} $1 == "$\r"
+    ${OrIf} $1 == "$\n"
+    ${OrIf} $1 == "$\t"
+      IntOp $0 $0 + 1
+    ${Else}
+      ${Break}
+    ${EndIf}
+  ${Loop}
+  StrCpy $LizenzNummer $LizenzNummer "" $0
+  StrCpy $1 $LizenzNummer 4
+  StrLen $2 $LizenzNummer
+  ${If} $1 != "XRK1"          ; Vergleich ohne Groß-/Kleinschreibung
+  ${OrIf} $2 < 100
+    MessageBox MB_ICONEXCLAMATION|MB_OK "Die Lizenznummer beginnt mit „XRK1-“ und ist etwa 140 Zeichen lang.$\r$\nBitte vollständig aus der Lizenz-E-Mail kopieren."
+    Abort
+  ${EndIf}
+FunctionEnd
+!endif
 
 Function ProgrammStarten
   Exec '"$INSTDIR\python\pythonw.exe" "$INSTDIR\starter.py"'
@@ -135,15 +243,59 @@ Section "Programm" SecProgramm
   SectionIn RO
   !insertmacro LaufendeBeenden
 
+  ; Erst in einen Zwischenordner entpacken – eine vorhandene Installation bleibt unverändert,
+  ; bis feststeht, dass die Lizenz gültig ist.
+  !insertmacro OrdnerEntfernen "$INSTDIR\_neu"
+  DetailPrint "Programmdateien entpacken …"
+  SetOutPath "$INSTDIR\_neu"
+  File /r "${INHALT}\*.*"
+
+!ifndef TESTVERSION
+  DetailPrint "Lizenz prüfen …"
+  Delete "$PLUGINSDIR\lizenz.ini"
+  WriteINIStr "$PLUGINSDIR\lizenz.ini" "Lizenz" "lizenznehmer" "$LizenzName"
+  WriteINIStr "$PLUGINSDIR\lizenz.ini" "Lizenz" "lizenznummer" "$LizenzNummer"
+  ClearErrors
+  ExecWait '"$INSTDIR\_neu\python\pythonw.exe" "$INSTDIR\_neu\starter.py" --lizenz-pruefen "$PLUGINSDIR\lizenz.ini"' $0
+  ${If} ${Errors}
+  ${OrIf} $0 != 0
+    ReadINIStr $1 "$PLUGINSDIR\lizenz.ini" "Lizenz" "fehler"
+    ${If} $1 == ""
+      StrCpy $1 "Die Lizenz konnte nicht geprüft werden (Fehlercode $0)."
+    ${EndIf}
+    SetOutPath "$TEMP"
+    !insertmacro OrdnerEntfernen "$INSTDIR\_neu"
+    RMDir "$INSTDIR"            ; nur wenn leer (Erstinstallation)
+    MessageBox MB_ICONSTOP|MB_OK "Die Lizenznummer ist nicht gültig:$\r$\n$1$\r$\n$\r$\nEs wurde nichts installiert. Bitte starten Sie die Installation erneut und geben Sie die Lizenz genau so ein, wie sie in Ihrer Lizenz-E-Mail steht." /SD IDOK
+    Abort "Installation abgebrochen: Lizenznummer ungültig."
+  ${EndIf}
+!endif
+
   ; Alte Programmdateien entfernen (Update), Einstellungen bleiben
+  SetOutPath "$INSTDIR"
   !insertmacro OrdnerEntfernen "$INSTDIR\python"
   !insertmacro OrdnerEntfernen "$INSTDIR\programm"
   !insertmacro OrdnerEntfernen "$INSTDIR\pruefung"
-
-  SetOutPath "$INSTDIR"
-  File /r "${INHALT}\*.*"
+  Delete "$INSTDIR\starter.py"
+  Delete "$INSTDIR\xrechnung.ico"
+  DetailPrint "Programmdateien übernehmen …"
+  Rename "$INSTDIR\_neu\python" "$INSTDIR\python"
+  Rename "$INSTDIR\_neu\programm" "$INSTDIR\programm"
+  ${If} ${FileExists} "$INSTDIR\_neu\pruefung\*.*"
+    Rename "$INSTDIR\_neu\pruefung" "$INSTDIR\pruefung"
+  ${EndIf}
+  Rename "$INSTDIR\_neu\starter.py" "$INSTDIR\starter.py"
+  Rename "$INSTDIR\_neu\xrechnung.ico" "$INSTDIR\xrechnung.ico"
+  RMDir /r "$INSTDIR\_neu"
+  ${IfNot} ${FileExists} "$INSTDIR\python\pythonw.exe"
+    MessageBox MB_ICONSTOP|MB_OK "Die Programmdateien konnten nicht übernommen werden. Bitte die Installation erneut starten." /SD IDOK
+    Abort "Programmdateien konnten nicht übernommen werden."
+  ${EndIf}
 
   CreateDirectory "$DATEN"
+!ifndef TESTVERSION
+  CopyFiles /SILENT "$PLUGINSDIR\lizenz.ini" "$DATEN\lizenz.ini"
+!endif
   WriteINIStr "${EINSTELLUNGEN}" "X-Rechnung" "datenordner" "$DATEN"
   WriteINIStr "${EINSTELLUNGEN}" "X-Rechnung" "version" "${VERSION}"
 
@@ -157,7 +309,7 @@ Section "Programm" SecProgramm
 
   ; Eintrag unter „Apps & Features“
   WriteUninstaller "$INSTDIR\Deinstallieren.exe"
-  WriteRegStr HKCU "${REGKEY}" "DisplayName" "${NAME}"
+  WriteRegStr HKCU "${REGKEY}" "DisplayName" "${NAME}${VARIANTE}"
   WriteRegStr HKCU "${REGKEY}" "DisplayVersion" "${VERSION}"
   WriteRegStr HKCU "${REGKEY}" "Publisher" "${FIRMA}"
   WriteRegStr HKCU "${REGKEY}" "DisplayIcon" "$INSTDIR\xrechnung.ico"
@@ -179,6 +331,7 @@ Section "Uninstall"
   !insertmacro OrdnerEntfernen "$INSTDIR\python"
   !insertmacro OrdnerEntfernen "$INSTDIR\programm"
   !insertmacro OrdnerEntfernen "$INSTDIR\pruefung"
+  RMDir /r "$INSTDIR\_neu"
   Delete "$INSTDIR\starter.py"
   Delete "$INSTDIR\xrechnung.ico"
   Delete "$INSTDIR\einstellungen.ini"

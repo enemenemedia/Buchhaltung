@@ -21,12 +21,21 @@
       <a class="knopf" href="{{ url_for('rechnungen.pdf', rechnung_id=r.id) }}" target="_blank" rel="noopener">PDF-Vorschau</a>
       {% if r.art != 'storno' %}<a class="knopf" href="{{ url_for('rechnungen.bearbeiten', rechnung_id=r.id) }}">Bearbeiten</a>{% endif %}
       <form method="post" action="{{ url_for('rechnungen.abschliessen', rechnung_id=r.id) }}"
-            onsubmit="return confirm('{{ belegart }} abschließen? Die Nummer wird vergeben, XRechnung und PDF werden im Rechnungsordner abgelegt. Danach ist der Beleg unveränderlich.')">
-        <button class="knopf knopf-primaer" type="submit" {% if not bereit %}disabled title="Bitte zuerst die fehlenden Angaben ergänzen"{% endif %}>Abschließen &amp; XRechnung erstellen</button>
+            onsubmit="return confirm('{{ belegart }} abschließen? Die Nummer wird vergeben, {{ 'XRechnung und PDF werden' if LIZENZ else 'das PDF wird' }} im Rechnungsordner abgelegt.{{ '' if LIZENZ else ' Testversion: Die XRechnung (XML) wird nicht erstellt.' }} Danach ist der Beleg unveränderlich.')">
+        <button class="knopf knopf-primaer" type="submit" {% if not bereit %}disabled title="Bitte zuerst die fehlenden Angaben ergänzen"{% endif %}>{{ 'Abschließen & XRechnung erstellen' if LIZENZ else 'Abschließen & PDF erstellen' }}</button>
       </form>
     {% else %}
       <a class="knopf knopf-primaer" href="{{ url_for('rechnungen.pdf', rechnung_id=r.id) }}" target="_blank" rel="noopener">PDF öffnen</a>
+      {% if r.xml_ausstehend %}
+        {% if LIZENZ %}
+        <form method="post" action="{{ url_for('rechnungen.xml_nachholen', rechnung_id=r.id) }}">
+          <button class="knopf" type="submit">XRechnung jetzt erstellen</button></form>
+        {% else %}
+        <a class="knopf" href="{{ url_for('einstellungen.seite') }}#lizenz" title="In der Testversion wird keine XRechnung erstellt">XRechnung (Testversion)</a>
+        {% endif %}
+      {% else %}
       <a class="knopf" href="{{ url_for('rechnungen.xml', rechnung_id=r.id) }}">XRechnung (XML)</a>
+      {% endif %}
       {% if kann_folgen %}
         <form method="post" action="{{ url_for('rechnungen.korrigieren', rechnung_id=r.id) }}">
           <button class="knopf" type="submit" {% if r.kunde_archiviert %}disabled title="Kunde ist archiviert"{% endif %}>Korrigieren</button></form>
@@ -52,6 +61,16 @@
 {% elif r.folge_id %}
 <div class="hinweisbox">Es gibt einen Entwurf einer {{ RECHNUNG_ARTEN[r.folge_art] }} zu dieser Rechnung:
   <a href="{{ url_for('rechnungen.detail', rechnung_id=r.folge_id) }}">Entwurf #{{ r.folge_id }}</a>.</div>
+{% endif %}
+
+{% if not LIZENZ and r.status == 'entwurf' %}
+<div class="testlizenz-hinweis"><strong>Testversion:</strong> Beim Abschließen wird nur das PDF erstellt, die
+  XRechnung (XML) nicht. Die Prüfung unten zeigt trotzdem, ob alle Angaben für die XRechnung vorhanden sind.
+  <a href="{{ url_for('einstellungen.seite') }}#lizenz">Lizenznummer eingeben</a></div>
+{% elif r.xml_ausstehend %}
+<div class="testlizenz-hinweis">Dieser Beleg wurde in der Testversion abgeschlossen – die XRechnung (XML) fehlt noch.
+  {% if LIZENZ %}Mit „XRechnung jetzt erstellen“ wird sie mit den Angaben zum Zeitpunkt des Abschlusses erzeugt.
+  {% else %}<a href="{{ url_for('einstellungen.seite') }}#lizenz">Nach Eingabe einer Lizenznummer</a> können Sie sie nachträglich erstellen.{% endif %}</div>
 {% endif %}
 
 {% if r.status == 'entwurf' %}
@@ -119,9 +138,14 @@
 <section class="karte abstand-oben">
   <h2>Ablage im Rechnungsordner</h2>
   <ul class="dateiliste">
+    {% if r.xml_ausstehend %}
+    <li><span class="dateityp fehlt">XML</span> <span class="mono gedimmt">{{ dateien.xml.name }}</span>
+      <span class="gedimmt">noch nicht erstellt (Testversion)</span></li>
+    {% else %}
     <li><span class="dateityp xml">XML</span> <span class="mono">{{ dateien.xml.name }}</span>
       <span class="gedimmt">XRechnung 3.0 (UBL{{ ', Gutschrift 381' if r.art == 'storno' else (', Korrektur 384' if r.art == 'korrektur' else '') }})</span>
       <a href="{{ url_for('rechnungen.xml', rechnung_id=r.id) }}">herunterladen</a></li>
+    {% endif %}
     <li><span class="dateityp pdf">PDF</span> <span class="mono">{{ dateien.pdf.name }}</span>
       <span class="gedimmt">Sichtbeleg</span> <a href="{{ url_for('rechnungen.pdf', rechnung_id=r.id) }}" target="_blank" rel="noopener">öffnen</a></li>
   </ul>

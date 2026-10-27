@@ -275,6 +275,9 @@ CREATE TABLE IF NOT EXISTS rechnungen (
     summe_ust           TEXT    NOT NULL DEFAULT '0',
     summe_gesamt        TEXT    NOT NULL DEFAULT '0',
     dateiname           TEXT,                               -- ohne Endung, relativ zum Datenverzeichnis
+    -- Abgeschlossen in der Testversion: XRechnung (XML) fehlt noch. JSON mit Angaben zum
+    -- Zeitpunkt des Abschlusses, damit die XML nach dem Lizenzieren nachgeholt werden kann.
+    xml_ausstehend      TEXT,
     abgeschlossen_am    TEXT,
     bezahlt_am          TEXT,
     erstellt_am         TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),

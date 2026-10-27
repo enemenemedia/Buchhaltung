@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entsperren – X-Rechnung für KMU</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="kopf">
+    <div class="kopf-innen">
+      <span class="marke">X-Rechnung <span>für KMU</span></span>
+      {% if DESKTOP %}
+      <div class="kopf-rechts">
+        <form method="post" action="{{ url_for('system_beenden') }}" onsubmit="return confirm('X-Rechnung für KMU beenden?')">
+          <button type="submit" class="beenden-knopf" title="Programm beenden">Beenden</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+  </header>
+  <main class="inhalt">
+    <section class="karte entsperren">
+      <h1>🔒 Datenbank gesperrt</h1>
+      <p class="untertitel">Die Datenbank ist verschlüsselt. Bitte geben Sie Ihr Passwort ein.</p>
+      <form method="post" action="{{ url_for('einstellungen.entsperren') }}" class="formular-spalte abstand-oben">
+        <input type="hidden" name="weiter" value="{{ weiter }}">
+        <label class="feld {% if fehler %}hat-fehler{% endif %}">
+          <span>Passwort</span>
+          <input type="password" name="passwort" required autofocus autocomplete="current-password">
+          {% if fehler %}<small class="fehlertext">{{ fehler }}</small>{% endif %}
+        </label>
+        <button class="knopf knopf-primaer" type="submit">Entsperren</button>
+      </form>
+      <p class="gedimmt klein abstand-oben">Datenordner: <span class="mono">{{ DATENORDNER }}</span></p>
+    </section>
+  </main>
+</body>
+</html>

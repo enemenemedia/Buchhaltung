@@ -1,4 +1,6 @@
-"""Baut den Windows-Installer „X-Rechnung-fuer-KMU-Setup-<Version>.exe“.
+"""Baut die Windows-Installer „X-Rechnung-fuer-KMU-Setup-<Version>.exe“ (Vollversion, nur mit
+gültiger Lizenznummer installierbar) und „X-Rechnung-fuer-KMU-Testversion-Setup-<Version>.exe“
+(ohne Lizenznummer; erstellt keine XRechnung).
 
 Läuft unter Linux (getestet: Ubuntu 24.04) – kein Windows nötig:
   1. Python 3.12 für Windows (64 Bit) aus conda-forge per micromamba
@@ -8,7 +10,7 @@ Läuft unter Linux (getestet: Ubuntu 24.04) – kein Windows nötig:
 
 Voraussetzungen:  apt install nsis   ·   micromamba (wird bei Bedarf geladen)
 Aufruf:
-  python3 windows/bauen.py [--pruefung <Ordner mit Prüfartefakten>] [--ausgabe dist]
+  python3 windows/bauen.py [--pruefung <Ordner mit Prüfartefakten>] [--ausgabe dist] [--variante voll|test|beide]
 
 Die Prüfartefakte erzeugt werkzeuge/pruefung_einrichten.py. Ohne --pruefung wird der
 Installer ohne eingebaute XRechnung-Prüfung gebaut (die Erzeugung funktioniert trotzdem).
@@ -141,7 +143,13 @@ def main() -> int:
     p.add_argument("--pruefung", help="Ordner mit den Prüfartefakten (siehe werkzeuge/pruefung_einrichten.py)")
     p.add_argument("--ausgabe", default=str(REPO / "dist"))
     p.add_argument("--arbeit", default=str(REPO / "build" / "windows"))
+    p.add_argument("--variante", choices=("voll", "test", "beide"), default="beide")
     a = p.parse_args()
+    sys.path.insert(0, str(REPO))
+    from app import lizenz
+    if a.variante != "test" and not lizenz.OEFFENTLICHER_SCHLUESSEL:
+        print("In app/lizenz.py ist kein öffentlicher Schlüssel hinterlegt – siehe werkzeuge/lizenz_erzeugen.py.")
+        return 1
     if not shutil.which("makensis"):
         print("makensis nicht gefunden – bitte NSIS installieren (z. B. apt install nsis).")
         return 1
@@ -159,7 +167,9 @@ def main() -> int:
     schritt("Anwendung, Starter und Symbol")
     programm = inhalt / "programm"
     shutil.copytree(REPO / "app", programm / "app", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    shutil.copytree(REPO / "werkzeuge", programm / "werkzeuge", ignore=shutil.ignore_patterns("__pycache__"))
+    # Das Lizenzwerkzeug gehört nicht zum Kunden (es nützt ohne privaten Schlüssel ohnehin nichts)
+    shutil.copytree(REPO / "werkzeuge", programm / "werkzeuge",
+                    ignore=shutil.ignore_patterns("__pycache__", "lizenz_erzeugen.py"))
     shutil.copy(WINDOWS / "starter.py", inhalt / "starter.py")
     symbol(inhalt / "xrechnung.ico")
     lizenztext(arbeit / "lizenz.txt")
@@ -178,11 +188,16 @@ def main() -> int:
     ausgabe = Path(a.ausgabe).resolve()
     ausgabe.mkdir(parents=True, exist_ok=True)
     groesse_kb = sum(f.stat().st_size for f in inhalt.rglob("*") if f.is_file()) // 1024
-    subprocess.run(["makensis", "-V2", f"-DVERSION={v}", f"-DINHALT={inhalt}", f"-DAUSGABE={ausgabe}",
-                    f"-DLIZENZ={arbeit / 'lizenz.txt'}", f"-DGROESSE_KB={groesse_kb}",
-                    str(WINDOWS / "installer.nsi")], check=True)
-    datei = ausgabe / f"X-Rechnung-fuer-KMU-Setup-{v}.exe"
-    print(f"\nFertig: {datei}  ({datei.stat().st_size / 1_048_576:.1f} MB, entpackt {groesse_kb / 1024:.0f} MB)")
+    varianten = {"voll": [("", f"X-Rechnung-fuer-KMU-Setup-{v}.exe")],
+                 "test": [("-DTESTVERSION", f"X-Rechnung-fuer-KMU-Testversion-Setup-{v}.exe")]}
+    varianten["beide"] = varianten["voll"] + varianten["test"]
+    print()
+    for schalter, name in varianten[a.variante]:
+        subprocess.run(["makensis", "-V2", f"-DVERSION={v}", f"-DINHALT={inhalt}", f"-DAUSGABE={ausgabe}",
+                        f"-DLIZENZ={arbeit / 'lizenz.txt'}", f"-DGROESSE_KB={groesse_kb}",
+                        *([schalter] if schalter else []), str(WINDOWS / "installer.nsi")], check=True)
+        datei = ausgabe / name
+        print(f"Fertig: {datei}  ({datei.stat().st_size / 1_048_576:.1f} MB, entpackt {groesse_kb / 1024:.0f} MB)")
     return 0
 
 
