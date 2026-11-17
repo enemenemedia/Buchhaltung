@@ -16,6 +16,7 @@
         <a href="{{ url_for('leistungen.liste') }}" class="{% if request.blueprint == 'leistungen' %}aktiv{% endif %}">Leistungen</a>
         <a href="{{ url_for('angebote.liste') }}" class="{% if request.blueprint == 'angebote' %}aktiv{% endif %}">Angebote</a>
         <a href="{{ url_for('rechnungen.liste') }}" class="{% if request.blueprint == 'rechnungen' %}aktiv{% endif %}">Rechnungen</a>
+        <a href="{{ url_for('belege.liste') }}" class="{% if request.blueprint == 'belege' %}aktiv{% endif %}">Belege</a>
         <a href="{{ url_for('einstellungen.seite') }}" class="{% if request.blueprint == 'einstellungen' %}aktiv{% endif %}">Einstellungen</a>
       </nav>
       <div class="kopf-rechts">

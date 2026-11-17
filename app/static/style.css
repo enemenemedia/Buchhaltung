@@ -403,3 +403,24 @@ details.einstellungen-gruppe[open] > summary { margin-bottom: 12px; }
 .entsperren { max-width: 420px; margin: 8vh auto 0; }
 .entsperren h1 { margin-bottom: 6px; }
 .dateityp.fehlt { background: #eceeed; color: #6b746f; }
+
+/* --- Buchhaltung: Belege und EÜR ------------------------------------------- */
+.belegablage { margin-bottom: 12px; position: relative; }
+.haken-inline { display: inline-flex; align-items: center; gap: 6px; }
+.haken-inline input { width: auto; margin: 0; }
+.betrag-einnahme { color: var(--akzent); }
+.betrag-ausgabe { color: var(--text); }
+tr.beleg-storniert td { color: var(--gedimmt); }
+tr.beleg-storniert td:nth-child(3) strong { text-decoration: line-through; text-decoration-thickness: 1px; }
+.beleg-vorschau { width: 100%; border: 1px solid var(--linie); border-radius: 6px; background: #fff; }
+iframe.beleg-vorschau { height: 560px; }
+.vorschau-karte .dateiname { margin: 0 0 8px; }
+.euer-tabelle { width: 100%; }
+.euer-tabelle td, .euer-tabelle th { padding: 7px 4px; }
+.euer-tabelle tfoot th { border-top: 2px solid var(--text); text-align: left; }
+.euer-tabelle tfoot th.rechts { text-align: right; }
+.euer-tabelle td.rechts, .euer-tabelle th.rechts { white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media print {
+  .kopf, .testlizenz-band, .fuss, .nicht-drucken, .hinweisbox a { display: none !important; }
+  .karte { break-inside: avoid; box-shadow: none; }
+}

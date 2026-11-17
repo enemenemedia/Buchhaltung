@@ -48,6 +48,7 @@ def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None) -> F
     app.config["LIZENZ"], app.config["LIZENZ_FEHLER"] = lizenz.laden(daten)
 
     from .angebote import bp as angebote_bp
+    from .belege import bp as belege_bp
     from .einstellungen import bp as einstellungen_bp
     from .kunden import bp as kunden_bp
     from .leistungen import bp as leistungen_bp
@@ -58,6 +59,7 @@ def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None) -> F
     app.register_blueprint(leistungen_bp)
     app.register_blueprint(angebote_bp)
     app.register_blueprint(rechnungen_bp)
+    app.register_blueprint(belege_bp)
     app.register_blueprint(einstellungen_bp)
 
     # Solange die Datenbank gesperrt ist, führt jede Seite zur Passworteingabe
@@ -69,6 +71,12 @@ def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None) -> F
             weiter = request.full_path if request.method == "GET" else "/"
             return redirect(url_for("einstellungen.entsperren", weiter=weiter.rstrip("?")))
         return None
+
+    @app.before_request
+    def _upload_grenze():
+        # Belegdateien (Scans, Fotos) dürfen bis 20 MB groß sein
+        if request.path.startswith("/belege"):
+            request.max_content_length = 21 * 1024 * 1024
 
     @app.before_request
     def _fremde_formulare_abweisen():
@@ -85,6 +93,9 @@ def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None) -> F
 
     @app.errorhandler(413)
     def zu_gross(_e):
+        if request.path.startswith("/belege"):
+            flash("Die Datei ist zu groß (höchstens 20 MB).", "fehler")
+            return redirect(url_for("belege.liste"))
         flash("Die Datei ist zu groß (höchstens 5 MB).", "fehler")
         if request.path.startswith("/leistungen"):
             return redirect(url_for("leistungen.import_start"))

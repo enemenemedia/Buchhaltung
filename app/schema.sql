@@ -429,3 +429,87 @@ WHEN (SELECT archiviert_am FROM kunden WHERE id = OLD.kunde_id) IS NOT NULL
 BEGIN
     SELECT RAISE(ABORT, 'Archivierte Kunden können nicht geändert werden. Bitte zuerst reaktivieren.');
 END;
+
+-- ===========================================================================
+-- Buchhaltung: Belegerfassung
+-- Beträge in ganzen Cent (INTEGER). Für die EÜR zählt das Zahlungsdatum
+-- (Zufluss-/Abflussprinzip, § 11 EStG); GWG und Anlagevermögen das Belegdatum.
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS belege (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    belegnummer     TEXT    UNIQUE,              -- beim Festschreiben: E-2026-0001 / A-2026-0001
+    art             TEXT    NOT NULL CHECK (art IN ('einnahme', 'ausgabe')),
+    belegdatum      TEXT    NOT NULL,
+    zahlungsdatum   TEXT,
+    partner         TEXT    NOT NULL,
+    rechnungsnummer TEXT,
+    beschreibung    TEXT    NOT NULL,
+    kategorie       TEXT    NOT NULL,
+    ust_satz        TEXT    NOT NULL CHECK (ust_satz IN ('19', '7', '0', 'mehrere')),
+    netto_cent      INTEGER NOT NULL,
+    ust_cent        INTEGER NOT NULL,
+    brutto_cent     INTEGER NOT NULL,
+    zahlungsart     TEXT,
+    notiz           TEXT,
+    nutzungsdauer   INTEGER,                     -- Jahre, nur für Anlagevermögen (AfA)
+    datei_name      TEXT,
+    datei_pfad      TEXT,                        -- relativ zu <Datenordner>/belege
+    datei_sha256    TEXT,
+    -- manuell | xrechnung (importierte Datei) | rechnung (aus dem Modul Rechnungen) | storno (Gegenbuchung)
+    quelle          TEXT    NOT NULL DEFAULT 'manuell' CHECK (quelle IN ('manuell', 'xrechnung', 'rechnung', 'storno')),
+    rechnung_id     INTEGER,                     -- Bezug auf rechnungen.id (bewusst ohne FK, s. u.)
+    status          TEXT    NOT NULL DEFAULT 'entwurf' CHECK (status IN ('entwurf', 'festgeschrieben', 'storniert')),
+    storno_von      INTEGER REFERENCES belege (id),
+    erfasst_am      TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
+    geaendert_am    TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
+    festgeschrieben_am TEXT,
+    CHECK (netto_cent + ust_cent = brutto_cent),
+    CHECK (status = 'entwurf' OR belegnummer IS NOT NULL)
+);
+-- rechnung_id ohne Fremdschlüssel: Rechnungen dürfen nach Ablauf der Aufbewahrungsfrist mit
+-- dem Kunden gelöscht werden; festgeschriebene Belege dürfen dabei nicht verändert werden.
+
+CREATE INDEX IF NOT EXISTS idx_belege_datum ON belege (belegdatum);
+CREATE INDEX IF NOT EXISTS idx_belege_zahlung ON belege (zahlungsdatum);
+CREATE INDEX IF NOT EXISTS idx_belege_rechnung ON belege (rechnung_id);
+
+-- Welche abgeschlossenen Rechnungen bereits in die Belegerfassung übernommen wurden
+CREATE TABLE IF NOT EXISTS rechnung_verbuchung (
+    rechnung_id     INTEGER PRIMARY KEY,
+    verbucht_am     TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
+    -- beleg: eigener Beleg mit Zahlungsabgleich | verrechnet: Storno einer unbezahlten Rechnung
+    -- (kein Geldfluss) | ohne_beleg: Korrektur ohne Betragsänderung
+    art             TEXT    NOT NULL CHECK (art IN ('beleg', 'verrechnet', 'ohne_beleg'))
+);
+
+-- GoBD: Festgeschriebene Belege sind unveränderbar. Erlaubt sind nur der Statuswechsel
+-- festgeschrieben -> storniert und das einmalige Nachtragen des Zahlungsdatums.
+CREATE TRIGGER IF NOT EXISTS belege_unveraenderbar
+BEFORE UPDATE ON belege
+WHEN OLD.status <> 'entwurf' AND NOT (
+        NEW.belegnummer IS OLD.belegnummer AND NEW.art IS OLD.art
+    AND NEW.belegdatum IS OLD.belegdatum
+    AND NEW.partner IS OLD.partner AND NEW.rechnungsnummer IS OLD.rechnungsnummer
+    AND NEW.beschreibung IS OLD.beschreibung AND NEW.kategorie IS OLD.kategorie
+    AND NEW.ust_satz IS OLD.ust_satz AND NEW.netto_cent IS OLD.netto_cent
+    AND NEW.ust_cent IS OLD.ust_cent AND NEW.brutto_cent IS OLD.brutto_cent
+    AND NEW.notiz IS OLD.notiz AND NEW.nutzungsdauer IS OLD.nutzungsdauer
+    AND NEW.quelle IS OLD.quelle AND NEW.rechnung_id IS OLD.rechnung_id AND NEW.storno_von IS OLD.storno_von
+    AND NEW.datei_name IS OLD.datei_name AND NEW.datei_pfad IS OLD.datei_pfad AND NEW.datei_sha256 IS OLD.datei_sha256
+    AND NEW.erfasst_am IS OLD.erfasst_am AND NEW.festgeschrieben_am IS OLD.festgeschrieben_am
+    AND (
+        (OLD.status = 'festgeschrieben' AND NEW.status = 'storniert'
+         AND NEW.zahlungsdatum IS OLD.zahlungsdatum AND NEW.zahlungsart IS OLD.zahlungsart)
+        OR (NEW.status = OLD.status AND OLD.zahlungsdatum IS NULL AND NEW.zahlungsdatum IS NOT NULL)
+    )
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Festgeschriebene Belege sind unveränderbar (GoBD). Bitte stornieren.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS belege_nicht_loeschbar
+BEFORE DELETE ON belege
+WHEN OLD.status <> 'entwurf'
+BEGIN
+    SELECT RAISE(ABORT, 'Festgeschriebene Belege dürfen nicht gelöscht werden (GoBD).');
+END;

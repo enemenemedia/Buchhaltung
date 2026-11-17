@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% from "_protokoll.html" import protokoll_liste %}
+{% block titel %}{{ b.belegnummer or 'Entwurf' }} – {{ PROGRAMM_NAME }}{% endblock %}
+{% block inhalt %}
+<nav class="brotkrumen"><a href="{{ url_for('belege.liste', jahr=(b.zahlungsdatum or b.belegdatum)[:4]) }}">Belege</a> › {{ b.belegnummer or 'Entwurf #' ~ b.id }}</nav>
+<div class="seitenkopf">
+  <h1>{{ b.belegnummer or 'Entwurf #' ~ b.id }}
+    <span class="status status-{{ 'offen' if b.status == 'festgeschrieben' else b.status }}">{{ STATUS[b.status] }}</span>
+    <span class="beleg-art">{{ 'Einnahme' if b.art == 'einnahme' else 'Ausgabe' }}</span></h1>
+  <div class="knopfgruppe umbruch-erlaubt">
+    {% if b.status == 'entwurf' %}
+      <a class="knopf" href="{{ url_for('belege.bearbeiten', beleg_id=b.id) }}">Bearbeiten</a>
+      <form method="post" action="{{ url_for('belege.loeschen', beleg_id=b.id) }}" onsubmit="return confirm('Entwurf löschen?')">
+        <button class="knopf knopf-gefahr-rand">Löschen</button></form>
+      <form method="post" action="{{ url_for('belege.festschreiben', beleg_id=b.id) }}"
+            onsubmit="return confirm('Beleg festschreiben? Danach sind keine Änderungen mehr möglich.')">
+        <button class="knopf knopf-primaer">Festschreiben</button></form>
+    {% endif %}
+  </div>
+</div>
+
+{% if original %}<div class="hinweisbox">Gegenbuchung (Storno) zu <a href="{{ url_for('belege.detail', beleg_id=original.id) }}">{{ original.belegnummer }}</a>.</div>{% endif %}
+{% if storno %}<div class="hinweisbox">Storniert durch <a href="{{ url_for('belege.detail', beleg_id=storno.id) }}">{{ storno.belegnummer }}</a>.</div>{% endif %}
+{% if rechnung %}<div class="hinweisbox ok-box">Automatisch übernommen aus
+  <a href="{{ url_for('rechnungen.detail', rechnung_id=rechnung.id) }}">{{ {'rechnung': 'Rechnung', 'storno': 'Stornorechnung', 'korrektur': 'Rechnungskorrektur'}[rechnung.art] }} {{ rechnung.nummer }}</a>.
+  Der Zahlungseingang wird aus „Rechnungen“ übernommen.</div>{% endif %}
+
+<div class="spalten">
+  <section class="karte">
+    <h2>Angaben</h2>
+    <dl class="angaben">
+      <dt>{{ 'Kunde' if b.art == 'einnahme' else 'Lieferant' }}</dt><dd><strong>{{ b.partner }}</strong></dd>
+      <dt>Beschreibung</dt><dd>{{ b.beschreibung }}</dd>
+      <dt>Belegdatum</dt><dd>{{ b.belegdatum|datum }}</dd>
+      <dt>Rechnungsnummer</dt><dd class="mono">{{ b.rechnungsnummer or '–' }}</dd>
+      <dt>Kategorie</dt><dd>{{ b.kategorie|kategorie }}{% if b.nutzungsdauer %} · Nutzungsdauer {{ b.nutzungsdauer }} Jahre{% endif %}</dd>
+      <dt>Bezahlt am</dt><dd>{{ b.zahlungsdatum|datum if b.zahlungsdatum else 'noch offen' }}{% if b.zahlungsart %} · {{ b.zahlungsart }}{% endif %}</dd>
+      {% if b.notiz %}<dt>Notiz</dt><dd>{{ b.notiz }}</dd>{% endif %}
+      {% if b.festgeschrieben_am %}<dt>Festgeschrieben</dt><dd>{{ b.festgeschrieben_am|datum(true) }}</dd>{% endif %}
+    </dl>
+    <div class="summenblock">
+      <div><span>Netto</span><span>{{ b.netto_cent|cent }}</span></div>
+      <div><span>USt ({{ ust_texte[b.ust_satz] }})</span><span>{{ b.ust_cent|cent }}</span></div>
+      <div class="summe-gesamt"><span>Brutto</span><span>{{ b.brutto_cent|cent }}</span></div>
+    </div>
+
+    {% if b.status == 'festgeschrieben' and b.quelle not in ('storno', 'rechnung') and not b.zahlungsdatum %}
+    <form class="zeilenformular abstand-oben" method="post" action="{{ url_for('belege.zahlung', beleg_id=b.id) }}">
+      <label class="feld"><span>Zahlung nachtragen</span><input type="date" name="zahlungsdatum" required></label>
+      <label class="feld"><span>Zahlungsart</span><select name="zahlungsart"><option value="">–</option>
+        {% for z in zahlungsarten %}<option>{{ z }}</option>{% endfor %}</select></label>
+      <button class="knopf">Speichern</button>
+    </form>
+    {% endif %}
+
+    {% if b.status == 'festgeschrieben' and b.quelle != 'storno' %}
+    <details class="ausklapp abstand-oben">
+      <summary>Beleg stornieren …</summary>
+      <form method="post" action="{{ url_for('belege.stornieren', beleg_id=b.id) }}" class="zeilenformular"
+            onsubmit="return confirm('Wirklich stornieren? Es wird eine Gegenbuchung angelegt.')">
+        <label class="feld"><span>Grund <em>*</em></span><input name="grund" required placeholder="z. B. doppelt erfasst, falscher Betrag"></label>
+        <button class="knopf knopf-gefahr">Stornieren</button>
+      </form>
+      {% if b.quelle == 'rechnung' %}<p class="gedimmt klein">Hinweis: Die Rechnung selbst wird damit nicht storniert – dafür im Modul „Rechnungen“ eine Stornorechnung erstellen.</p>{% endif %}
+    </details>
+    {% endif %}
+  </section>
+
+  <section class="karte vorschau-karte">
+    <h2>Belegdatei</h2>
+    {% if b.datei_pfad %}
+      {% set endung = b.datei_name.rsplit('.', 1)[-1]|lower %}
+      <p class="dateiname">📎 {{ b.datei_name }} · <a href="{{ url_for('belege.datei', beleg_id=b.id, download=1) }}">Herunterladen</a></p>
+      {% if endung in ['jpg', 'jpeg', 'png'] %}<img class="beleg-vorschau" src="{{ url_for('belege.datei', beleg_id=b.id) }}" alt="Belegbild">
+      {% elif endung == 'pdf' %}<iframe class="beleg-vorschau" src="{{ url_for('belege.datei', beleg_id=b.id) }}" title="Beleg-PDF"></iframe>
+      {% else %}<p class="gedimmt">XML-Datei (XRechnung) – zum Ansehen herunterladen.</p>{% endif %}
+      <p class="gedimmt klein mono umbruch" title="SHA-256-Prüfsumme der Originaldatei">SHA-256: {{ b.datei_sha256 }}</p>
+    {% elif rechnung %}
+      <p>Die Rechnung liegt im Kundenordner:
+        <a href="{{ url_for('rechnungen.detail', rechnung_id=rechnung.id) }}">{{ rechnung.nummer }} öffnen</a> (PDF und XRechnung).</p>
+    {% else %}
+      <p class="gedimmt">Keine Belegdatei hinterlegt.</p>
+    {% endif %}
+  </section>
+</div>
+
+<section class="karte">
+  <h2>Änderungsprotokoll</h2>
+  {{ protokoll_liste(protokoll) }}
+</section>
+{% endblock %}

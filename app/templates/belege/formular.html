@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block titel %}{{ 'Beleg bearbeiten' if beleg_id else 'Beleg erfassen' }} – {{ PROGRAMM_NAME }}{% endblock %}
+
+{% macro fehlertext(name) -%}
+  {% if fehler.get(name) %}<small class="fehlertext">{{ fehler[name] }}</small>{% endif %}
+{%- endmacro %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+  <h1>{{ 'Entwurf bearbeiten' if beleg_id else 'Beleg erfassen' }}</h1>
+</div>
+
+{% if fehler %}<div class="meldung meldung-fehler" role="alert">Bitte die markierten Angaben prüfen.
+  {% if fehler.get('datei') %}<br>{{ fehler.datei }}{% endif %}</div>{% endif %}
+
+<form method="post" class="formular" enctype="multipart/form-data" novalidate
+      action="{{ url_for('belege.bearbeiten', beleg_id=beleg_id) if beleg_id else url_for('belege.neu') }}">
+  <section class="karte">
+    <div class="segmente" role="radiogroup" aria-label="Art">
+      {% for wert, text in [('ausgabe', 'Ausgabe'), ('einnahme', 'Einnahme')] %}
+      <label class="segment {% if (beleg.art or 'ausgabe') == wert %}gewaehlt{% endif %}">
+        <input type="radio" name="art" value="{{ wert }}" {% if (beleg.art or 'ausgabe') == wert %}checked{% endif %}> {{ text }}</label>
+      {% endfor %}
+    </div>
+    <div class="raster abstand-oben">
+      <label class="feld s3 {% if fehler.get('belegdatum') %}hat-fehler{% endif %}"><span>Belegdatum <em>*</em></span>
+        <input type="date" name="belegdatum" value="{{ beleg.belegdatum or '' }}" required>{{ fehlertext('belegdatum') }}</label>
+      <label class="feld s3"><span>Rechnungsnummer</span>
+        <input name="rechnungsnummer" value="{{ beleg.rechnungsnummer or '' }}" placeholder="Nummer auf dem Beleg"></label>
+      <label class="feld s6 {% if fehler.get('partner') %}hat-fehler{% endif %}"><span id="partner-label">{{ 'Kunde' if beleg.art == 'einnahme' else 'Lieferant' }} <em>*</em></span>
+        <input name="partner" value="{{ beleg.partner or '' }}" required>{{ fehlertext('partner') }}</label>
+      <label class="feld s12 {% if fehler.get('beschreibung') %}hat-fehler{% endif %}"><span>Beschreibung <em>*</em></span>
+        <input name="beschreibung" value="{{ beleg.beschreibung or '' }}" maxlength="300" required>{{ fehlertext('beschreibung') }}</label>
+      <label class="feld s8 {% if fehler.get('kategorie') %}hat-fehler{% endif %}"><span>Kategorie (EÜR) <em>*</em></span>
+        <select name="kategorie" id="kategorie">
+          <optgroup label="Einnahmen" data-art="einnahme">
+            {% for k, v in einnahmen.items() %}<option value="{{ k }}" {% if k == beleg.kategorie %}selected{% endif %}>{{ v }}</option>{% endfor %}
+          </optgroup>
+          <optgroup label="Ausgaben" data-art="ausgabe">
+            {% for k, v in ausgaben.items() %}<option value="{{ k }}" {% if k == beleg.kategorie %}selected{% endif %}>{{ v }}</option>{% endfor %}
+          </optgroup>
+        </select>{{ fehlertext('kategorie') }}</label>
+      <label class="feld s4 {% if fehler.get('nutzungsdauer') %}hat-fehler{% endif %}" id="nd-feld"><span>Nutzungsdauer (Jahre)</span>
+        <input type="number" name="nutzungsdauer" min="1" max="50" value="{{ beleg.nutzungsdauer or '' }}">
+        {% if fehler.get('nutzungsdauer') %}{{ fehlertext('nutzungsdauer') }}{% else %}<small>laut AfA-Tabelle, z. B. Computer 1, Büromöbel 13</small>{% endif %}</label>
+    </div>
+  </section>
+
+  <section class="karte">
+    <h2>Beträge</h2>
+    <div class="raster">
+      <label class="feld s3 {% if fehler.get('ust_satz') %}hat-fehler{% endif %}"><span>USt-Satz</span>
+        <select name="ust_satz" id="ust_satz">
+          {% for s, t in ust_texte.items() %}<option value="{{ s }}" {% if s == beleg.ust_satz %}selected{% endif %}>{{ t }}</option>{% endfor %}
+        </select></label>
+      <label class="feld s3 {% if fehler.get('netto') %}hat-fehler{% endif %}"><span>Netto €</span>
+        <input name="netto" id="netto" inputmode="decimal" class="rechts" value="{{ beleg.netto or '' }}" placeholder="0,00">{{ fehlertext('netto') }}</label>
+      <label class="feld s3 {% if fehler.get('ust') %}hat-fehler{% endif %}"><span>USt €</span>
+        <input name="ust" id="ust" inputmode="decimal" class="rechts" value="{{ beleg.ust or '' }}" placeholder="0,00">{{ fehlertext('ust') }}</label>
+      <label class="feld s3"><span>Brutto €</span>
+        <input name="brutto" id="brutto" inputmode="decimal" class="rechts" value="{{ beleg.brutto or '' }}" placeholder="0,00"></label>
+    </div>
+    <p class="gedimmt klein">Netto <em>oder</em> Brutto eingeben – der Rest wird berechnet. Gutschriften mit Minus eingeben.</p>
+  </section>
+
+  <section class="karte">
+    <h2>Zahlung</h2>
+    <div class="raster">
+      <label class="feld s3 {% if fehler.get('zahlungsdatum') %}hat-fehler{% endif %}"><span>Bezahlt am</span>
+        <input type="date" name="zahlungsdatum" value="{{ beleg.zahlungsdatum or '' }}">{{ fehlertext('zahlungsdatum') }}</label>
+      <label class="feld s3"><span>Zahlungsart</span>
+        <select name="zahlungsart"><option value="">–</option>
+          {% for z in zahlungsarten %}<option {% if z == beleg.zahlungsart %}selected{% endif %}>{{ z }}</option>{% endfor %}
+        </select></label>
+    </div>
+    <p class="gedimmt klein">Für die EÜR zählt das Zahlungsdatum (Zufluss-/Abflussprinzip). Es kann später einmalig nachgetragen werden.</p>
+  </section>
+
+  <section class="karte">
+    <h2>Belegdatei und Notiz</h2>
+    {% if beleg.datei_name and beleg_id %}<p>Aktuelle Datei: <a href="{{ url_for('belege.datei', beleg_id=beleg_id) }}" target="_blank">{{ beleg.datei_name }}</a></p>{% endif %}
+    <label class="ablage belegablage" id="ablage">
+      <input type="file" name="datei" accept=".pdf,.jpg,.jpeg,.png,.xml">
+      <span>PDF, Foto oder XML hierher ziehen oder klicken (höchstens 20 MB)</span>
+    </label>
+    <label class="feld"><span>Notiz</span><textarea name="notiz" rows="2">{{ beleg.notiz or '' }}</textarea></label>
+  </section>
+
+  <div class="knopfgruppe umbruch-erlaubt">
+    <button class="knopf" name="aktion" value="speichern">Als Entwurf speichern</button>
+    <button class="knopf knopf-primaer" name="aktion" value="festschreiben"
+            onclick="return confirm('Beleg festschreiben? Danach sind keine Änderungen mehr möglich.')">Speichern und festschreiben</button>
+    {% if not beleg_id %}<label class="klein gedimmt haken-inline"><input type="checkbox" name="weiter" value="1"> danach nächsten Beleg erfassen</label>{% endif %}
+    <a class="knopf-text" href="{{ url_for('belege.detail', beleg_id=beleg_id) if beleg_id else url_for('belege.liste') }}">Abbrechen</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block skripte %}
+<script>
+(function () {
+  const satzEl = document.getElementById('ust_satz');
+  const netto = document.getElementById('netto'), ust = document.getElementById('ust'), brutto = document.getElementById('brutto');
+  const kat = document.getElementById('kategorie'), nd = document.getElementById('nd-feld');
+  const OHNE_UST = {{ ohne_ust|tojson }};
+  const parse = s => {
+    s = (s || '').replace(/[€\s]/g, '');
+    if (!s) return null;
+    if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+    const n = Number(s); return isNaN(n) ? null : Math.round(n * 100);
+  };
+  const fmt = c => (c < 0 ? '-' : '') + Math.floor(Math.abs(c) / 100) + ',' + String(Math.abs(c) % 100).padStart(2, '0');
+  const satz = () => ({ '19': 0.19, '7': 0.07, '0': 0 })[satzEl.value];
+  let zuletzt = 'netto';
+  function ausNetto() { const n = parse(netto.value), s = satz(); if (n === null || s === undefined) return;
+    const u = Math.round(n * s); ust.value = fmt(u); brutto.value = fmt(n + u); }
+  function ausBrutto() { const b = parse(brutto.value), s = satz(); if (b === null || s === undefined) return;
+    const n = Math.round(b / (1 + s)); netto.value = fmt(n); ust.value = fmt(b - n); }
+  netto.addEventListener('input', () => { zuletzt = 'netto'; ausNetto(); });
+  brutto.addEventListener('input', () => { zuletzt = 'brutto'; ausBrutto(); });
+  satzEl.addEventListener('change', () => (zuletzt === 'netto' ? ausNetto() : ausBrutto()));
+
+  function kategorieWechsel() {
+    nd.hidden = kat.value !== 'anlagevermoegen';
+    if (OHNE_UST.includes(kat.value)) { satzEl.value = '0'; satzEl.dispatchEvent(new Event('change')); }
+  }
+  function artWechsel() {
+    const art = document.querySelector('input[name=art]:checked').value;
+    document.querySelectorAll('.segment').forEach(s => s.classList.toggle('gewaehlt', s.querySelector('input').checked));
+    document.getElementById('partner-label').firstChild.textContent = (art === 'einnahme' ? 'Kunde' : 'Lieferant') + ' ';
+    kat.querySelectorAll('optgroup').forEach(g => { const passt = g.dataset.art === art; g.hidden = !passt; g.disabled = !passt; });
+    if (kat.selectedOptions[0]?.parentElement.dataset.art !== art) kat.value = art === 'einnahme' ? 'umsatz_steuerpflichtig' : 'sonstige_ausgaben';
+    kategorieWechsel();
+  }
+  document.querySelectorAll('input[name=art]').forEach(r => r.addEventListener('change', artWechsel));
+  kat.addEventListener('change', kategorieWechsel);
+  artWechsel();
+
+  const ablage = document.getElementById('ablage'), feld = ablage.querySelector('input');
+  ['dragenter', 'dragover'].forEach(e => ablage.addEventListener(e, ev => { ev.preventDefault(); ablage.classList.add('aktiv'); }));
+  ['dragleave', 'drop'].forEach(e => ablage.addEventListener(e, () => ablage.classList.remove('aktiv')));
+  ablage.addEventListener('drop', ev => { ev.preventDefault(); feld.files = ev.dataTransfer.files; zeigen(); });
+  feld.addEventListener('change', zeigen);
+  function zeigen() { if (feld.files.length) ablage.querySelector('span').textContent = '📎 ' + feld.files[0].name; }
+})();
+</script>
+{% endblock %}
