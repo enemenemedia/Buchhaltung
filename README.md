@@ -1,8 +1,12 @@
-# Kundenverwaltung mit X-Rechnung
+# Buchhaltung für KMU
 
-Lokale Software für KMU zur Verwaltung von Kunden, Leistungen und Angeboten sowie
-zur Erstellung von X-Rechnungen (mit PDF-Ansicht). Basis ist eine SQLite-Datenbank;
-die Bedienung erfolgt im Browser.
+Lokale Software für kleine Unternehmen und Selbstständige: Kunden, Leistungen, Angebote und
+Rechnungen als XRechnung (mit PDF), dazu **Belegerfassung** und **Einnahmen-Überschuss-Rechnung (EÜR)**.
+Basis ist eine SQLite-Datenbank (auf Wunsch verschlüsselt); die Bedienung erfolgt im Browser.
+
+Das Programm ist aus „Kundenverwaltung mit X-Rechnung“ (Programmname „X-Rechnung für KMU“) entstanden,
+dessen vollständige Historie dieses Repository enthält. Abgeschlossene Rechnungen landen automatisch
+in der Belegerfassung und damit in der EÜR.
 
 ## Stand
 
@@ -17,18 +21,23 @@ die Bedienung erfolgt im Browser.
 | Windows-Installationsprogramm | ✅ fertig |
 | Lizenzprüfung und Testversion | ✅ fertig |
 | Verschlüsselung der Datenbank mit Passwort | ✅ fertig |
+| **Belegerfassung** (Einnahmen/Ausgaben, Belegdateien, GoBD-Festschreibung) | ✅ fertig |
+| **Einnahmen-Überschuss-Rechnung** (mit AfA, Anlagenverzeichnis, PDF/CSV) | ✅ fertig |
 
 ## Installation unter Windows
 
-Es gibt zwei Setup-Dateien – Python und alle Komponenten (inklusive XRechnung-Prüfung) sind
-jeweils enthalten, Administratorrechte sind nicht nötig:
+Es gibt zwei Setup-Dateien – Python und alle Komponenten sind jeweils enthalten,
+Administratorrechte sind nicht nötig:
 
 | | Vollversion | Testversion |
 |---|---|---|
-| Datei | `X-Rechnung-fuer-KMU-Setup-<Version>.exe` | `X-Rechnung-fuer-KMU-Testversion-Setup-<Version>.exe` |
+| Datei | `Buchhaltung-fuer-KMU-Setup-<Version>.exe` | `Buchhaltung-fuer-KMU-Testversion-Setup-<Version>.exe` |
 | Installation | nur mit gültiger Lizenznummer | ohne Lizenznummer |
 | XRechnung (XML) | ✅ | ❌ – Hinweis „Testversion“ im Programm |
+| Belegerfassung und EÜR | ✅ | ✅ (voll nutzbar) |
 | alles andere | ✅ | ✅ |
+
+Lizenznummern von „X-Rechnung für KMU“ (`XRK1-…`) gelten unverändert.
 
 - **Vollversion:** Der Installer fragt Lizenznehmer und Lizenznummer ab. Er entpackt die
   Programmdateien zunächst in einen Zwischenordner und prüft die Lizenz mit dem mitgelieferten
@@ -38,10 +47,15 @@ jeweils enthalten, Administratorrechte sind nicht nötig:
 - **Testversion:** Eine Lizenznummer kann jederzeit im Programm unter **Einstellungen → Lizenz**
   eingegeben werden – ohne Neuinstallation und ohne Datenverlust.
 
-- **Programmordner:** `%LOCALAPPDATA%\Programs\X-Rechnung für KMU` (änderbar)
-- **Datenordner:** `Dokumente\X-Rechnung` (im Installer änderbar; darf nicht im Programmordner liegen)
+- **Programmordner:** `%LOCALAPPDATA%\Programs\Buchhaltung für KMU` (änderbar)
+- **Datenordner:** `Dokumente\Buchhaltung für KMU` (im Installer änderbar; darf nicht im Programmordner liegen).
+  Findet der Installer Daten von „X-Rechnung für KMU“ (`Dokumente\X-Rechnung`), weist er darauf hin:
+  Wird dieser Ordner gewählt, arbeitet das Programm mit den vorhandenen Kunden, Rechnungen und der
+  Lizenz weiter (die Datenbank wird um die Buchhaltungstabellen ergänzt). Beide Programme dann nicht
+  gleichzeitig verwenden.
 - Verknüpfungen im Startmenü (Programm, „Datenordner öffnen“, Deinstallation) und auf dem Desktop
-- Das Programm startet einen lokalen Server (nur `127.0.0.1`, Port 8765 oder ein freier Port) und
+- Das Programm startet einen lokalen Server (nur `127.0.0.1`, Port 8766 oder ein freier Port – so kann es
+  neben „X-Rechnung für KMU“ auf Port 8765 laufen) und
   öffnet den Browser. Ein zweiter Start öffnet nur den Browser. Beendet wird über **Beenden** oben rechts.
 - **Update:** neue Setup-Datei einfach ausführen – ein laufendes Programm wird beendet,
   Datenordner und Einstellungen bleiben erhalten.
@@ -49,6 +63,8 @@ jeweils enthalten, Administratorrechte sind nicht nötig:
   wegen der gesetzlichen Aufbewahrungsfristen erhalten.
 - Protokoll für die Fehlersuche: `<Datenordner>\protokoll\programm.log`
 - Die Lizenz liegt als `lizenz.ini` im Datenordner und bleibt bei Deinstallation und Update erhalten.
+- INI-Dateien (`einstellungen.ini`, `lizenz.ini`) werden als UTF-16 geschrieben und in jeder Kodierung
+  gelesen – Umlaute im Datenordner oder im Namen des Lizenznehmers sind kein Problem.
 - Die Setup-Datei ist nicht signiert. Windows SmartScreen meldet daher „Der Computer wurde durch
   Windows geschützt“; weiter über „Weitere Informationen“ → „Trotzdem ausführen“.
 
@@ -70,19 +86,19 @@ und erzeugt den Installer mit NSIS (`windows/installer.nsi`). Die Version kommt 
 
 ## Installation unter macOS
 
-Ebenfalls zwei Pakete, jeweils ein ZIP mit dem Programm „X-Rechnung für KMU.app“ – für
+Ebenfalls zwei Pakete, jeweils ein ZIP mit dem Programm „Buchhaltung für KMU.app“ – für
 Apple Silicon und Intel-Macs (macOS 10.15 oder neuer), Python und alle Komponenten sind enthalten:
 
 | | Vollversion | Testversion |
 |---|---|---|
-| Datei | `X-Rechnung-fuer-KMU-<Version>-macOS.zip` | `X-Rechnung-fuer-KMU-Testversion-<Version>-macOS.zip` |
+| Datei | `Buchhaltung-fuer-KMU-<Version>-macOS.zip` | `Buchhaltung-fuer-KMU-Testversion-<Version>-macOS.zip` |
 | Lizenz | wird beim ersten Start abgefragt; ohne gültige Lizenz startet das Programm nicht | keine – XRechnung (XML) wird nicht erstellt |
 
-- **Installation:** ZIP öffnen, „X-Rechnung für KMU“ in den Ordner „Programme“ ziehen.
+- **Installation:** ZIP öffnen, „Buchhaltung für KMU“ in den Ordner „Programme“ ziehen.
   Ein Mac-Programm hat keinen Installer; die Lizenzabfrage des Windows-Installers erfolgt deshalb
   beim ersten Start (Dialog für Lizenznehmer und Lizenznummer, Prüfung wie unter Windows).
-- **Datenordner:** wird beim ersten Start gewählt (Vorschlag `~/Documents/X-Rechnung`), gespeichert in
-  `~/Library/Application Support/X-Rechnung/einstellungen.ini`. Die Lizenz liegt wie unter Windows als
+- **Datenordner:** wird beim ersten Start gewählt (Vorschlag `~/Documents/Buchhaltung für KMU`), gespeichert in
+  `~/Library/Application Support/Buchhaltung für KMU/einstellungen.ini`. Die Lizenz liegt wie unter Windows als
   `lizenz.ini` im Datenordner. Liegt dort bereits eine Lizenz (auch eine abgelaufene), startet das
   Programm immer – ohne gültige Lizenz als Testversion, damit die Daten zugänglich bleiben.
 - Das Programm läuft im Browser (nur `127.0.0.1`), ohne Symbol im Dock; beendet wird es über **Beenden**.
@@ -116,11 +132,14 @@ python run.py
 
 Danach im Browser `http://127.0.0.1:5000` öffnen.
 
-Alle Daten liegen im Ordner `daten/` (änderbar über die Umgebungsvariable `XRECHNUNG_DATEN`):
+Alle Daten liegen im Ordner `daten/` (änderbar über die Umgebungsvariable `XRECHNUNG_DATEN`;
+der Windows-Starter liest zusätzlich `BUCHHALTUNG_DATEN`):
 
 ```
 daten/
-├── xrechnung.db             SQLite-Datenbank
+├── xrechnung.db             SQLite-Datenbank (auch Belege; Name aus Kompatibilitätsgründen)
+├── belege/
+│   └── 2026/7d/7d4a…f67db.pdf   Belegdateien, unveränderlich unter ihrer SHA-256-Prüfsumme
 ├── stammdaten/
 │   ├── logo.png             aktuelles Firmenlogo
 │   └── logo_archiv/         frühere Logos
@@ -325,6 +344,62 @@ export XRECHNUNG_ARTEFAKTE=daten/xrechnung-pruefung    # Windows: set XRECHNUNG_
 Ist die Variable gesetzt, prüft die Anwendung jede XRechnung **vor dem Abschließen** und
 verweigert ungültige Rechnungen. Einzelne Dateien prüfen:
 `python werkzeuge/xrechnung_pruefen.py pfad/zur/rechnung.xml`
+
+## Belegerfassung
+
+Menü **Belege**. Alle Belege liegen in derselben Datenbank wie Kunden und Rechnungen – also auch
+verschlüsselt, wenn die Datenbank verschlüsselt ist.
+
+- **Erfassen** von Einnahmen und Ausgaben: Belegdatum, Partner, Rechnungsnummer, Beschreibung,
+  EÜR-Kategorie, USt-Satz (19 %, 7 %, 0 %, mehrere). Netto *oder* Brutto eingeben – der Rest wird
+  berechnet. Gutschriften mit Minus. Für Anlagevermögen zusätzlich die Nutzungsdauer (AfA-Tabelle).
+- **Belegdatei** (PDF, JPG, PNG, XML, bis 20 MB) per Klick oder Drag & Drop. Sie wird unverändert unter
+  ihrer SHA-256-Prüfsumme abgelegt (`<Datenordner>/belege/<Jahr>/…`); die Prüfsumme steht am Beleg.
+- **GoBD:** Entwürfe sind frei änderbar und löschbar. **Festschreiben** vergibt eine fortlaufende Nummer
+  (`E-2026-0001` Einnahmen, `A-2026-0001` Ausgaben); danach ist der Beleg unveränderbar und nicht
+  löschbar – auch per Datenbank-Trigger. Korrekturen nur über **Storno** (Gegenbuchung mit Grund).
+  Jede Aktion steht im Änderungsprotokoll.
+- **Zahlungsdatum** (Zufluss/Abfluss) – kann auch nach dem Festschreiben einmalig nachgetragen werden.
+- **XRechnung einlesen** (UBL und CII), z. B. Eingangsrechnungen von Lieferanten: legt einen Entwurf mit
+  Partner, Nummer, Beträgen und Steuersätzen an; Doppelerfassungen werden erkannt.
+- **Rechnungen aus dem Modul „Rechnungen“ werden automatisch übernommen** – als festgeschriebene
+  Einnahme, ebenso später der Zahlungseingang. Das funktioniert auch in der Testversion (ohne XML):
+
+  | Fall | Buchung |
+  |---|---|
+  | Rechnung | Einnahme über den Rechnungsbetrag, Zahlung = Zahlungseingang |
+  | Storno einer **offenen** Rechnung | Gegenbuchung ohne Geldfluss – beide heben sich auf |
+  | Storno einer **bezahlten** Rechnung | Erstattung (negative Einnahme), Zahlung = Erstattung |
+  | Korrektur einer **offenen** Rechnung | Original wird storniert, Korrektur voll gebucht |
+  | Korrektur einer **bezahlten** Rechnung | nur die Differenz wird gebucht |
+  | Zahlung zurückgesetzt/geändert | Beleg storniert und mit aktuellem Stand neu gebucht |
+
+- **Liste** mit Filter (Jahr, Art, Status, „noch nicht bezahlt“), Suche, Kennzahlen und CSV-Export.
+
+## Einnahmen-Überschuss-Rechnung (EÜR)
+
+Menü **EÜR**, je Kalenderjahr, aus allen festgeschriebenen Belegen:
+
+- **Zufluss-/Abflussprinzip** (§ 11 EStG): es zählt das Zahlungsdatum. Belege ohne Zahlung und
+  Entwürfe sind nicht enthalten – die Seite weist darauf hin.
+- **Betriebseinnahmen** je Kategorie, vereinnahmte Umsatzsteuer, Erstattungen des Finanzamts.
+- **Betriebsausgaben** je Kategorie, gezahlte Vorsteuer, an das Finanzamt gezahlte Umsatzsteuer.
+- **Bewirtung** zu 70 % abziehbar (der nicht abziehbare Teil wird ausgewiesen; Vorsteuer voll).
+- **GWG** (bis 800 € netto) im Jahr der Anschaffung, **Anlagevermögen** mit linearer AfA,
+  monatsgenau, und **Anlagenverzeichnis** (AK, AfA bisher, AfA des Jahres, Restwert).
+- **Kleinunternehmer** (§ 19 UStG, aus den Stammdaten): Ausgaben brutto, keine Vorsteuer.
+- **Monatswerte** (Einnahmen, Ausgaben, USt, Vorsteuer, Zahllast) als Grundlage der
+  Umsatzsteuer-Voranmeldung (Ist-Versteuerung).
+- Export als **PDF** und **CSV**, Druckansicht.
+
+Die Kategorien folgen den Gruppen der Anlage EÜR. Die Zuordnung zu den Formularzeilen des
+jeweiligen Jahres bitte mit der Steuerberatung abstimmen. Die Software ersetzt keine Steuerberatung.
+
+## Sicherheit
+
+- Der Server ist nur lokal erreichbar (`127.0.0.1`).
+- Formulare fremder Webseiten werden abgewiesen (Prüfung von `Origin`/`Referer` bei jedem POST).
+- Belegdateien: nur PDF, JPG, PNG und XML; XML wird mit `defusedxml` gelesen (Schutz vor XML-Bomben).
 
 ## Tests
 

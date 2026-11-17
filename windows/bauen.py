@@ -1,6 +1,6 @@
-"""Baut die Windows-Installer „X-Rechnung-fuer-KMU-Setup-<Version>.exe“ (Vollversion, nur mit
-gültiger Lizenznummer installierbar) und „X-Rechnung-fuer-KMU-Testversion-Setup-<Version>.exe“
-(ohne Lizenznummer; erstellt keine XRechnung).
+"""Baut die Windows-Installer „Buchhaltung-fuer-KMU-Setup-<Version>.exe“ (Vollversion, nur mit
+gültiger Lizenznummer installierbar) und „Buchhaltung-fuer-KMU-Testversion-Setup-<Version>.exe“
+(ohne Lizenznummer; erstellt keine XRechnung – Belegerfassung und EÜR sind voll nutzbar).
 
 Läuft unter Linux (getestet: Ubuntu 24.04) – kein Windows nötig:
   1. Python 3.12 für Windows (64 Bit) aus conda-forge per micromamba
@@ -113,7 +113,7 @@ def aufraeumen(ziel: Path) -> None:
 
 
 def symbol_bild(groesse: int = 256):
-    """Programmsymbol (Rechnungsblatt mit €) – auch für das macOS-Symbol (windows → macos/bauen.py)."""
+    """Programmsymbol (Blatt mit steigenden Balken und €-Münze) – auch für macOS (macos/bauen.py)."""
     from PIL import Image, ImageDraw, ImageFont
 
     f = groesse / 256
@@ -125,8 +125,11 @@ def symbol_bild(groesse: int = 256):
     d = ImageDraw.Draw(gross)
     d.rounded_rectangle(s(20, 8, 236, 248), radius=round(28 * f), fill=(31, 111, 92, 255))
     d.polygon([s(176, 8), s(236, 68), s(176, 68)], fill=(23, 50, 43, 255))
-    for i, breite in enumerate((120, 150, 100)):
-        d.rounded_rectangle(s(52, 92 + i * 34, 52 + breite, 106 + i * 34), radius=round(7 * f), fill=(227, 240, 236, 255))
+    # Balken der Einnahmen-Überschuss-Rechnung
+    for i, hoehe in enumerate((46, 78, 112)):
+        x = 50 + i * 36
+        d.rounded_rectangle(s(x, 178 - hoehe, x + 24, 178), radius=round(5 * f), fill=(227, 240, 236, 255))
+    d.rounded_rectangle(s(44, 186, 164, 194), radius=round(4 * f), fill=(227, 240, 236, 255))
     try:
         schrift = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", round(88 * f))
     except OSError:
@@ -181,7 +184,7 @@ def main() -> int:
     shutil.copytree(REPO / "werkzeuge", programm / "werkzeuge",
                     ignore=shutil.ignore_patterns("__pycache__", "lizenz_erzeugen.py"))
     shutil.copy(WINDOWS / "starter.py", inhalt / "starter.py")
-    symbol(inhalt / "xrechnung.ico")
+    symbol(inhalt / "buchhaltung.ico")
     lizenztext(arbeit / "lizenz.txt")
     if a.pruefung:
         schritt("Regelwerke der XRechnung-Prüfung")
@@ -198,8 +201,8 @@ def main() -> int:
     ausgabe = Path(a.ausgabe).resolve()
     ausgabe.mkdir(parents=True, exist_ok=True)
     groesse_kb = sum(f.stat().st_size for f in inhalt.rglob("*") if f.is_file()) // 1024
-    varianten = {"voll": [("", f"X-Rechnung-fuer-KMU-Setup-{v}.exe")],
-                 "test": [("-DTESTVERSION", f"X-Rechnung-fuer-KMU-Testversion-Setup-{v}.exe")]}
+    varianten = {"voll": [("", f"Buchhaltung-fuer-KMU-Setup-{v}.exe")],
+                 "test": [("-DTESTVERSION", f"Buchhaltung-fuer-KMU-Testversion-Setup-{v}.exe")]}
     varianten["beide"] = varianten["voll"] + varianten["test"]
     print()
     for schalter, name in varianten[a.variante]:

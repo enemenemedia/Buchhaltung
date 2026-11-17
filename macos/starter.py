@@ -1,7 +1,7 @@
-"""macOS-Starter für „X-Rechnung für KMU“.
+"""macOS-Starter für „Buchhaltung für KMU“.
 
-Wird vom Programm im App-Bundle gestartet (Contents/MacOS/X-Rechnung). Ablauf:
-  1. Datenordner bestimmen – beim ersten Start fragen (Vorschlag: ~/Documents/X-Rechnung)
+Wird vom Programm im App-Bundle gestartet (Contents/MacOS/Buchhaltung). Ablauf:
+  1. Datenordner bestimmen – beim ersten Start fragen (Vorschlag: ~/Documents/Buchhaltung für KMU)
   2. Vollversion: ohne Lizenz im Datenordner Lizenznehmer und Lizenznummer abfragen;
      ohne gültige Lizenz startet die Vollversion nicht (Gegenstück zur Lizenzabfrage im
      Windows-Installer). Die Testversion fragt nicht.
@@ -16,7 +16,7 @@ Aufbau des App-Bundles (Contents/Resources):
   starter.py                      diese Datei
   variante.txt                    „voll“ oder „test“
 
-Einstellungen (Datenordner) liegen in ~/Library/Application Support/X-Rechnung/, weil das
+Einstellungen (Datenordner) liegen in ~/Library/Application Support/Buchhaltung für KMU/, weil das
 App-Bundle schreibgeschützt bleiben muss (sonst ist seine Signatur ungültig).
 """
 
@@ -37,10 +37,10 @@ import webbrowser
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-PROGRAMM = "X-Rechnung für KMU"
+PROGRAMM = "Buchhaltung für KMU"
 BASIS = Path(__file__).resolve().parent
 STANDARD_PORT = 8765
-UNTERSTUETZUNG = Path.home() / "Library" / "Application Support" / "X-Rechnung"
+UNTERSTUETZUNG = Path.home() / "Library" / "Application Support" / "Buchhaltung für KMU"
 EINSTELLUNGEN = UNTERSTUETZUNG / "einstellungen.ini"
 ZUSTAND = UNTERSTUETZUNG / "laufend.json"
 
@@ -108,14 +108,14 @@ def datenordner_waehlen(vorschlag: Path) -> Path:
             "set erg to display dialog (item 1 of argv) with title (item 2 of argv) "
             'buttons {"Beenden", "Anderen Ordner wählen …", "OK"} default button "OK" cancel button "Beenden" with icon note',
             "return button returned of erg",
-        ], "Willkommen bei X-Rechnung für KMU!\n\nIhre Daten – Datenbank sowie je Kunde Angebote, Rechnungen "
+        ], "Willkommen bei Buchhaltung für KMU!\n\nIhre Daten – Datenbank sowie je Kunde Angebote, Rechnungen "
            "(XML und PDF) und Dokumente – werden in diesem Ordner gespeichert:\n\n"
            f"{vorschlag}\n\nWählen Sie einen Ordner, der regelmäßig gesichert wird.", PROGRAMM)
         if knopf == "OK":
             return vorschlag
         try:
             gewaehlt = _osascript(['return POSIX path of (choose folder with prompt (item 1 of argv))'],
-                                  "Ordner für die Daten von X-Rechnung für KMU wählen")
+                                  "Ordner für die Daten von Buchhaltung für KMU wählen")
         except Abgebrochen:
             continue
         pfad = Path(gewaehlt)
@@ -127,22 +127,22 @@ def datenordner_waehlen(vorschlag: Path) -> Path:
         except OSError:
             belegt = True
         # Ein nicht leerer Ordner (z. B. „Dokumente“) bekommt einen eigenen Unterordner
-        vorschlag = pfad / "X-Rechnung" if belegt and not (pfad / "xrechnung.db").exists() else pfad
+        vorschlag = pfad / "Buchhaltung für KMU" if belegt and not (pfad / "xrechnung.db").exists() else pfad
 
 
 def datenordner(fragen: bool = True) -> Path:
     if os.environ.get("XRECHNUNG_DATEN"):
         return Path(os.environ["XRECHNUNG_DATEN"])
-    wert = _einstellungen().get("X-Rechnung", "datenordner", fallback="").strip()
+    wert = _einstellungen().get("Buchhaltung", "datenordner", fallback="").strip()
     if wert:
         return Path(os.path.expanduser(wert))
-    standard = Path.home() / "Documents" / "X-Rechnung"
+    standard = Path.home() / "Documents" / "Buchhaltung für KMU"
     if not fragen:
         return standard
     gewaehlt = datenordner_waehlen(standard)
     UNTERSTUETZUNG.mkdir(parents=True, exist_ok=True)
     cfg = _einstellungen()
-    cfg["X-Rechnung"] = {"datenordner": str(gewaehlt)}
+    cfg["Buchhaltung"] = {"datenordner": str(gewaehlt)}
     with EINSTELLUNGEN.open("w", encoding="utf-8") as f:
         cfg.write(f)
     return gewaehlt
@@ -185,7 +185,7 @@ def kennung(port: int) -> dict | None:
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/system/kennung", timeout=2) as antwort:
             daten = json.loads(antwort.read().decode("utf-8"))
-            return daten if daten.get("app") == "xrechnung-kmu" else None
+            return daten if daten.get("app") == "buchhaltung-kmu" else None
     except Exception:
         return None
 

@@ -32,7 +32,7 @@ def seite():
 def csv(jahr: int):
     rechnungen_abgleichen()
     text = service.csv_export(service.berechnen(get_db(), jahr))
-    return Response(text, mimetype="text/csv; charset=utf-8",
+    return Response(text, content_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": f"attachment; filename=EUER_{jahr}.csv"})
 
 

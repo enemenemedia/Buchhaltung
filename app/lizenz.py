@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import base64
 import configparser
+import io
 import struct
 import unicodedata
 from dataclasses import dataclass
@@ -142,11 +143,34 @@ def erzeugen(privater_schluessel, lizenznehmer: str, seriennummer: int, *, guelt
 # Ablage im Datenordner (lizenz.ini) – schreibt auch der Installer
 # ---------------------------------------------------------------------------
 
+def ini_text(pfad: Path) -> str:
+    """Liest eine INI-Datei unabhängig von ihrer Kodierung.
+
+    Der Windows-Installer (NSIS, WritePrivateProfileString) schreibt INI-Dateien als UTF-16
+    mit BOM bzw. – in eine neue Datei ohne BOM – in der ANSI-Codepage. Ohne diese Erkennung
+    scheiterte die Lizenzprüfung bei Lizenznehmern mit Umlauten („Häusler“)."""
+    roh = Path(pfad).read_bytes()
+    if roh[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        return roh.decode("utf-16")
+    try:
+        return roh.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return roh.decode("cp1252", errors="replace")
+
+
+def ini_schreiben(pfad: Path, cfg: configparser.ConfigParser) -> None:
+    """Schreibt eine INI-Datei als UTF-16 mit BOM – diese Form lesen Python und Windows
+    (NSIS) gleichermaßen verlustfrei, auch mit Umlauten."""
+    puffer = io.StringIO()
+    cfg.write(puffer)
+    Path(pfad).write_bytes(b"\xff\xfe" + puffer.getvalue().replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-16-le"))
+
+
 def datei_lesen(pfad: Path) -> tuple[str, str]:
     cfg = configparser.ConfigParser(interpolation=None)
     try:
-        cfg.read(pfad, encoding="utf-8-sig")
-    except (configparser.Error, UnicodeDecodeError):
+        cfg.read_string(ini_text(pfad))
+    except (configparser.Error, OSError):
         return "", ""
     return (cfg.get("Lizenz", "lizenznehmer", fallback="").strip(),
             cfg.get("Lizenz", "lizenznummer", fallback="").strip())
@@ -171,6 +195,5 @@ def speichern(datenverzeichnis: Path, lizenz: Lizenz) -> None:
     cfg["Lizenz"] = {"lizenznehmer": lizenz.lizenznehmer, "lizenznummer": lizenz.nummer}
     pfad = Path(datenverzeichnis) / DATEI
     neu = pfad.with_suffix(".neu")
-    with neu.open("w", encoding="utf-8") as f:
-        cfg.write(f)
+    ini_schreiben(neu, cfg)
     neu.replace(pfad)

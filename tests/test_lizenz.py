@@ -80,6 +80,24 @@ def test_lizenzdatei(tmp_path, lizenz_schluessel):
     assert geladen is None and "passen nicht" in fehler
 
 
+@pytest.mark.parametrize("kodierung,bom", [("utf-16-le", b"\xff\xfe"), ("cp1252", b""), ("utf-8", b"")])
+def test_lizenzdatei_mit_umlauten_jeder_kodierung(tmp_path, lizenz_schluessel, kodierung, bom):
+    """Der Installer (NSIS) schreibt INI-Dateien als UTF-16 oder in der ANSI-Codepage –
+    ein Lizenznehmer mit Umlauten muss trotzdem erkannt werden."""
+    l = lizenz.pruefen(NAME, lizenz.erzeugen(lizenz_schluessel, NAME, 6))
+    text = f"[Lizenz]\r\nlizenznehmer={NAME}\r\nlizenznummer={l.nummer}\r\n"
+    (tmp_path / lizenz.DATEI).write_bytes(bom + text.encode(kodierung))
+    assert lizenz.laden(tmp_path)[0] == l
+
+
+def test_lizenzdatei_wird_als_utf16_geschrieben(tmp_path, lizenz_schluessel):
+    l = lizenz.pruefen(NAME, lizenz.erzeugen(lizenz_schluessel, NAME, 7))
+    lizenz.speichern(tmp_path, l)
+    roh = (tmp_path / lizenz.DATEI).read_bytes()
+    assert roh.startswith(b"\xff\xfe") and NAME in roh.decode("utf-16")
+    assert lizenz.laden(tmp_path)[0] == l
+
+
 def test_werkzeug(tmp_path, lizenz_schluessel, capsys):
     import sys
     from pathlib import Path

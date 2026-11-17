@@ -1,10 +1,10 @@
-"""Baut „X-Rechnung für KMU“ für macOS – Vollversion und Testversion als ZIP mit App-Bundle.
+"""Baut „Buchhaltung für KMU“ für macOS – Vollversion und Testversion als ZIP mit App-Bundle.
 
 Läuft unter Linux (wie windows/bauen.py) – kein Mac nötig:
   1. Python 3.12 für macOS aus conda-forge per micromamba, je einmal für Apple Silicon (osx-arm64)
      und Intel (osx-64). Das Programm wählt beim Start die passende Laufzeit.
   2. Python-Pakete als macOS-Wheels von PyPI (pip --platform)
-  3. App-Bundle „X-Rechnung für KMU.app“ mit Starter, Symbol und – optional – den Regelwerken
+  3. App-Bundle „Buchhaltung für KMU.app“ mit Starter, Symbol und – optional – den Regelwerken
      der XRechnung-Prüfung
   4. Alle Mach-O-Dateien ad hoc signieren (rcodesign). Nötig, weil micromamba beim Einrichten
      Pfade in den Programmdateien ersetzt; Apple Silicon startet Programme mit ungültiger
@@ -14,8 +14,8 @@ Läuft unter Linux (wie windows/bauen.py) – kein Mac nötig:
 Aufruf:
   python3 macos/bauen.py [--pruefung <Ordner>] [--ausgabe dist] [--variante voll|test|beide]
 
-Ergebnis: dist/X-Rechnung-fuer-KMU-<Version>-macOS.zip und
-          dist/X-Rechnung-fuer-KMU-Testversion-<Version>-macOS.zip
+Ergebnis: dist/Buchhaltung-fuer-KMU-<Version>-macOS.zip und
+          dist/Buchhaltung-fuer-KMU-Testversion-<Version>-macOS.zip
 """
 
 from __future__ import annotations
@@ -49,8 +49,8 @@ def _windows_bauen():
 
 windows = _windows_bauen()
 
-APP = "X-Rechnung für KMU.app"
-BUNDLE_ID = "de.ene-mene-media.xrechnung-kmu"
+APP = "Buchhaltung für KMU.app"
+BUNDLE_ID = "de.ene-mene-media.buchhaltung-kmu"
 PYTHON_VERSION = windows.PYTHON_VERSION
 # Prozessor → (conda-Plattform, Wheel-Plattform)
 ARCHITEKTUREN = {"arm64": ("osx-arm64", "macosx_11_0_arm64"), "x86_64": ("osx-64", "macosx_10_15_x86_64")}
@@ -66,10 +66,10 @@ ENTFERNEN = [
     "include", "share", "conda-meta", "man", "ssl/misc", "lib/tcl8", f"lib/{PY}/site-packages/setuptools",
     f"lib/{PY}/site-packages/_distutils_hack", f"lib/{PY}/site-packages/wheel", f"lib/{PY}/site-packages/distutils-precedence.pth",
 ]
-VARIANTEN = {"voll": "X-Rechnung-fuer-KMU-{v}-macOS.zip", "test": "X-Rechnung-fuer-KMU-Testversion-{v}-macOS.zip"}
+VARIANTEN = {"voll": "Buchhaltung-fuer-KMU-{v}-macOS.zip", "test": "Buchhaltung-fuer-KMU-Testversion-{v}-macOS.zip"}
 
 STARTSKRIPT = """#!/bin/bash
-# Startet X-Rechnung für KMU mit der Python-Laufzeit für diesen Prozessor.
+# Startet Buchhaltung für KMU mit der Python-Laufzeit für diesen Prozessor.
 R="$(cd "$(dirname "$0")/../Resources" && pwd)"
 if [ "$(uname -m)" = "arm64" ] && [ -x "$R/python-arm64/bin/python3" ]; then
   PY="$R/python-arm64/bin/python3"
@@ -80,17 +80,17 @@ fi
 exec "$PY" -I -B "$R/starter.py" "$@"
 """
 
-LIESMICH = """X-Rechnung für KMU {v}{zusatz} für macOS
+LIESMICH = """Buchhaltung für KMU {v}{zusatz} für macOS
 ==========================================
 
 Installation
-  1. „X-Rechnung für KMU“ in den Ordner „Programme“ ziehen.
+  1. „Buchhaltung für KMU“ in den Ordner „Programme“ ziehen.
   2. Beim ersten Öffnen meldet macOS, dass der Entwickler nicht überprüft werden kann
      (das Programm ist noch nicht von Apple notarisiert):
      - macOS 15 und neuer: Programm einmal öffnen, die Meldung schließen, dann
        Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen“.
      - macOS 14 und älter: Programm mit gedrückter ctrl-Taste anklicken → „Öffnen“ → „Öffnen“.
-  3. Beim ersten Start wählen Sie den Datenordner (Vorschlag: Dokumente/X-Rechnung){lizenz}
+  3. Beim ersten Start wählen Sie den Datenordner (Vorschlag: Dokumente/Buchhaltung für KMU){lizenz}
 
 Das Programm läuft im Browser (nur auf diesem Mac, 127.0.0.1). Beendet wird es über
 „Beenden“ oben rechts in der Oberfläche. Ein Symbol im Dock erscheint nicht.
@@ -258,10 +258,10 @@ def signatur_pruefen(pfad: Path) -> str | None:
 def info_plist(v: str) -> dict:
     return {
         "CFBundleDevelopmentRegion": "de",
-        "CFBundleDisplayName": "X-Rechnung für KMU",
-        "CFBundleName": "X-Rechnung",
-        "CFBundleExecutable": "X-Rechnung",
-        "CFBundleIconFile": "xrechnung",
+        "CFBundleDisplayName": "Buchhaltung für KMU",
+        "CFBundleName": "Buchhaltung",
+        "CFBundleExecutable": "Buchhaltung",
+        "CFBundleIconFile": "buchhaltung",
         "CFBundleIdentifier": BUNDLE_ID,
         "CFBundleInfoDictionaryVersion": "6.0",
         "CFBundlePackageType": "APPL",
@@ -284,14 +284,14 @@ def bundle(inhalt: Path, ziel: Path, laufzeiten: Path, v: str, variante: str, pr
     with (contents / "Info.plist").open("wb") as f:
         plistlib.dump(info_plist(v), f)
     (contents / "PkgInfo").write_text("APPL????", encoding="ascii")
-    start = contents / "MacOS" / "X-Rechnung"
+    start = contents / "MacOS" / "Buchhaltung"
     start.write_text(STARTSKRIPT, encoding="utf-8")
     start.chmod(0o755)
     for arch in ARCHITEKTUREN:
         shutil.copytree(laufzeiten / f"python-{arch}", res / f"python-{arch}", symlinks=True)
     shutil.copytree(inhalt / "programm", res / "programm")
     shutil.copy(MACOS / "starter.py", res / "starter.py")
-    shutil.copy(inhalt / "xrechnung.icns", res / "xrechnung.icns")
+    shutil.copy(inhalt / "buchhaltung.icns", res / "buchhaltung.icns")
     (res / "variante.txt").write_text(variante + "\n", encoding="utf-8")
     if pruefung:
         shutil.copytree(pruefung, res / "pruefung")
@@ -372,7 +372,7 @@ def main() -> int:
     shutil.copytree(REPO / "app", inhalt / "programm" / "app", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     shutil.copytree(REPO / "werkzeuge", inhalt / "programm" / "werkzeuge",
                     ignore=shutil.ignore_patterns("__pycache__", "lizenz_erzeugen.py"))
-    windows.symbol_bild(1024).save(inhalt / "xrechnung.icns")
+    windows.symbol_bild(1024).save(inhalt / "buchhaltung.icns")
     lizenz_text = (REPO / "LICENSE").read_text(encoding="utf-8") + "\n" + "-" * 70 + "\n" + \
         (MACOS / "DRITTANBIETER.txt").read_text(encoding="utf-8")
 

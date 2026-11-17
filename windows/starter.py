@@ -1,8 +1,8 @@
-"""Windows-Starter für „X-Rechnung für KMU“.
+"""Windows-Starter für „Buchhaltung für KMU“.
 
 Wird über die Verknüpfung im Startmenü bzw. auf dem Desktop mit pythonw.exe gestartet
 (kein Konsolenfenster). Ablauf:
-  1. Datenordner bestimmen (Einstellung des Installers, sonst Dokumente\\X-Rechnung)
+  1. Datenordner bestimmen (Einstellung des Installers, sonst Dokumente\\Buchhaltung für KMU)
   2. Läuft das Programm bereits, nur den Browser öffnen
   3. Sonst den lokalen Server (waitress, nur 127.0.0.1) starten und den Browser öffnen
 Beendet wird über den Knopf „Beenden“ in der Oberfläche.
@@ -12,7 +12,7 @@ Aufbau des Installationsordners:
   programm\\       Anwendung (app\\, werkzeuge\\)
   pruefung\\       Regelwerke für die XRechnung-Prüfung (XSD, EN 16931, KoSIT)
   starter.py      diese Datei
-  einstellungen.ini   vom Installer geschrieben (Datenordner)
+  einstellungen.ini   vom Installer geschrieben (Datenordner; UTF-16 oder ANSI)
 
 Der Installer ruft den Starter außerdem mit --lizenz-pruefen <ini> auf, um die eingegebene
 Lizenznummer zu prüfen, bevor er etwas installiert (Rückgabewert 0 = gültig).
@@ -34,10 +34,12 @@ import webbrowser
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-PROGRAMM = "X-Rechnung für KMU"
+PROGRAMM = "Buchhaltung für KMU"
+APP_KENNUNG = "buchhaltung-kmu"
+INI_ABSCHNITT = "Buchhaltung"
 BASIS = Path(__file__).resolve().parent
-STANDARD_PORT = 8765
-ZUSTAND = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "X-Rechnung" / "laufend.json"
+STANDARD_PORT = 8766            # 8765 nutzt „X-Rechnung für KMU“ – beide können parallel laufen
+ZUSTAND = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Buchhaltung-KMU" / "laufend.json"
 
 sys.path.insert(0, str(BASIS / "programm"))
 
@@ -78,16 +80,21 @@ def dokumente_ordner() -> Path:
 
 
 def datenordner() -> Path:
-    if os.environ.get("XRECHNUNG_DATEN"):
-        return Path(os.environ["XRECHNUNG_DATEN"])
+    for variable in ("BUCHHALTUNG_DATEN", "XRECHNUNG_DATEN"):
+        if os.environ.get(variable):
+            return Path(os.environ[variable])
     ini = BASIS / "einstellungen.ini"
     if ini.is_file():
-        cfg = configparser.ConfigParser()
-        cfg.read(ini, encoding="utf-8")
-        wert = cfg.get("X-Rechnung", "datenordner", fallback="").strip()
+        from app.lizenz import ini_text          # liest UTF-16 (Installer), UTF-8 und ANSI
+        cfg = configparser.ConfigParser(interpolation=None)
+        try:
+            cfg.read_string(ini_text(ini))
+        except configparser.Error:
+            pass
+        wert = cfg.get(INI_ABSCHNITT, "datenordner", fallback="").strip()
         if wert:
             return Path(os.path.expandvars(wert))
-    return dokumente_ordner() / "X-Rechnung"
+    return dokumente_ordner() / PROGRAMM
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +105,7 @@ def kennung(port: int) -> dict | None:
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/system/kennung", timeout=2) as antwort:
             daten = json.loads(antwort.read().decode("utf-8"))
-            return daten if daten.get("app") == "xrechnung-kmu" else None
+            return daten if daten.get("app") == APP_KENNUNG else None
     except Exception:
         return None
 
@@ -216,8 +223,7 @@ def lizenz_pruefen(ini: str) -> int:
     except lizenz.LizenzFehler as e:
         cfg = configparser.ConfigParser(interpolation=None)
         cfg["Lizenz"] = {"lizenznehmer": name, "lizenznummer": nummer, "fehler": str(e)}
-        with pfad.open("w", encoding="utf-8") as f:
-            cfg.write(f)
+        lizenz.ini_schreiben(pfad, cfg)          # UTF-16: der Installer liest den Fehler mit Umlauten
         return 2
     lizenz.speichern(pfad.parent, l)
     if pfad.name != lizenz.DATEI:

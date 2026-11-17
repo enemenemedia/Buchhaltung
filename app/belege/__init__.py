@@ -230,5 +230,5 @@ def datei(beleg_id: int):
 def export_csv():
     flt = _filter()
     text = service.csv_export(service.liste(get_db(), flt))
-    return Response(text, mimetype="text/csv; charset=utf-8",
+    return Response(text, content_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": f"attachment; filename=belege_{flt.jahr or 'alle'}.csv"})

@@ -1,4 +1,4 @@
-; Installer für „X-Rechnung für KMU“ (NSIS 3, Unicode)
+; Installer für „Buchhaltung für KMU“ (NSIS 3, Unicode)
 ; Gebaut von windows/bauen.py – Aufruf von Hand:
 ;   makensis -DVERSION=1.0.0 -DINHALT=<inhalt> -DAUSGABE=<dist> -DLIZENZ=<lizenz.txt> -DGROESSE_KB=<kb> [-DTESTVERSION] installer.nsi
 ;
@@ -10,8 +10,10 @@
 ;   Eine Lizenznummer kann später im Programm unter „Einstellungen“ eingegeben werden.
 ;
 ; - Installation ohne Administratorrechte für den angemeldeten Benutzer
-; - Programmordner: %LOCALAPPDATA%\Programs\X-Rechnung für KMU (änderbar)
-; - Datenordner:    Dokumente\X-Rechnung (änderbar; bei Updates wird der bisherige übernommen)
+; - Programmordner: %LOCALAPPDATA%\Programs\Buchhaltung für KMU (änderbar)
+; - Datenordner:    Dokumente\Buchhaltung für KMU (änderbar; bei Updates wird der bisherige übernommen;
+;                   vorhandene Daten von „X-Rechnung für KMU“ können weiterverwendet werden)
+; - INI-Dateien werden als UTF-16 angelegt, damit Umlaute (Pfad, Lizenznehmer) erhalten bleiben
 ; - Deinstallation entfernt das Programm, NICHT die Daten (Aufbewahrungspflichten!)
 
 Unicode true
@@ -19,17 +21,19 @@ SetCompressor /SOLID lzma
 SetCompressorDictSize 64
 ManifestDPIAware true
 
-!define NAME "X-Rechnung für KMU"
+!define NAME "Buchhaltung für KMU"
 !define FIRMA "Ene Mene Media"
 !ifdef TESTVERSION
   !define VARIANTE " (Testversion)"
-  !define DATEINAME "X-Rechnung-fuer-KMU-Testversion-Setup-${VERSION}.exe"
+  !define DATEINAME "Buchhaltung-fuer-KMU-Testversion-Setup-${VERSION}.exe"
 !else
   !define VARIANTE ""
-  !define DATEINAME "X-Rechnung-fuer-KMU-Setup-${VERSION}.exe"
+  !define DATEINAME "Buchhaltung-fuer-KMU-Setup-${VERSION}.exe"
 !endif
-!define REGKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\XRechnungKMU"
+!define REGKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\BuchhaltungKMU"
 !define EINSTELLUNGEN "$INSTDIR\einstellungen.ini"
+!define INI_ABSCHNITT "Buchhaltung"
+!define SYMBOL "buchhaltung.ico"
 
 Name "${NAME}${VARIANTE}"
 OutFile "${AUSGABE}\${DATEINAME}"
@@ -47,6 +51,7 @@ VIAddVersionKey /LANG=1031 "CompanyName" "${FIRMA}"
 VIAddVersionKey /LANG=1031 "LegalCopyright" "MIT-Lizenz"
 
 Var DATEN
+Var DATENHINWEIS
 !ifndef TESTVERSION
 Var LizenzName
 Var LizenzNummer
@@ -59,16 +64,16 @@ Var FeldNummer
 !include "FileFunc.nsh"
 !include "nsDialogs.nsh"
 
-!define MUI_ICON "${INHALT}\xrechnung.ico"
-!define MUI_UNICON "${INHALT}\xrechnung.ico"
+!define MUI_ICON "${INHALT}\${SYMBOL}"
+!define MUI_UNICON "${INHALT}\${SYMBOL}"
 !define MUI_ABORTWARNING
 
 ; --- Seiten -----------------------------------------------------------------------
 !define MUI_WELCOMEPAGE_TITLE "Willkommen bei ${NAME} ${VERSION}${VARIANTE}"
 !ifdef TESTVERSION
-!define MUI_WELCOMEPAGE_TEXT "Dieser Assistent installiert die Testversion von ${NAME} – Kunden, Leistungen, Angebote und Rechnungen mit PDF.$\r$\n$\r$\nIn der Testversion sind alle Funktionen nutzbar, XRechnungen (XML) werden jedoch nicht erstellt. Mit einer Lizenznummer (im Programm unter „Einstellungen“) wird daraus die Vollversion – ohne Neuinstallation und ohne Datenverlust.$\r$\n$\r$\nDie Installation benötigt keine Administratorrechte."
+!define MUI_WELCOMEPAGE_TEXT "Dieser Assistent installiert die Testversion von ${NAME} – Kunden, Angebote und Rechnungen mit PDF, Belegerfassung und Einnahmen-Überschuss-Rechnung.$\r$\n$\r$\nIn der Testversion sind alle Funktionen nutzbar, XRechnungen (XML) werden jedoch nicht erstellt. Mit einer Lizenznummer (im Programm unter „Einstellungen“) wird daraus die Vollversion – ohne Neuinstallation und ohne Datenverlust.$\r$\n$\r$\nDie Installation benötigt keine Administratorrechte."
 !else
-!define MUI_WELCOMEPAGE_TEXT "Dieser Assistent installiert ${NAME} – Kunden, Leistungen, Angebote und Rechnungen mit XRechnung und PDF.$\r$\n$\r$\nFür die Installation benötigen Sie Ihre Lizenznummer. Die Installation benötigt keine Administratorrechte. Python und alle benötigten Komponenten sind enthalten.$\r$\n$\r$\nKlicken Sie auf „Weiter“, um fortzufahren."
+!define MUI_WELCOMEPAGE_TEXT "Dieser Assistent installiert ${NAME} – Kunden, Angebote und Rechnungen mit XRechnung und PDF, Belegerfassung und Einnahmen-Überschuss-Rechnung (EÜR).$\r$\n$\r$\nFür die Installation benötigen Sie Ihre Lizenznummer. Die Installation benötigt keine Administratorrechte. Python und alle benötigten Komponenten sind enthalten.$\r$\n$\r$\nKlicken Sie auf „Weiter“, um fortzufahren."
 !endif
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "${LIZENZ}"
@@ -79,10 +84,11 @@ Var FeldNummer
 !insertmacro MUI_PAGE_DIRECTORY
 
 !define MUI_PAGE_HEADER_TEXT "Datenordner"
-!define MUI_PAGE_HEADER_SUBTEXT "Wo sollen Datenbank, Angebote, Rechnungen und Dokumente gespeichert werden?"
-!define MUI_DIRECTORYPAGE_TEXT_TOP "In diesem Ordner legt das Programm die Datenbank sowie je Kunde die Ordner für Angebote, Rechnungen (XML und PDF) und Dokumente an. Wählen Sie einen Ordner, der regelmäßig gesichert wird.$\r$\n$\r$\nBei einer Aktualisierung wird der bisherige Datenordner vorgeschlagen."
+!define MUI_PAGE_HEADER_SUBTEXT "Wo sollen Datenbank, Rechnungen und Belege gespeichert werden?"
+!define MUI_DIRECTORYPAGE_TEXT_TOP "Hier legt das Programm die Datenbank, je Kunde Angebote und Rechnungen (XML und PDF) sowie die Belegablage an. Wählen Sie einen Ordner, der regelmäßig gesichert wird. Bei einer Aktualisierung wird der bisherige Datenordner vorgeschlagen.$DATENHINWEIS"
 !define MUI_DIRECTORYPAGE_TEXT_DESTINATION "Datenordner"
 !define MUI_DIRECTORYPAGE_VARIABLE $DATEN
+!define MUI_PAGE_CUSTOMFUNCTION_PRE DatenseiteVorbereiten
 !define MUI_PAGE_CUSTOMFUNCTION_LEAVE DatenordnerPruefen
 !insertmacro MUI_PAGE_DIRECTORY
 
@@ -107,10 +113,10 @@ Page custom LizenzSeite LizenzSeiteVerlassen
 ; --- Funktionen ---------------------------------------------------------------------
 Function .onInit
   InitPluginsDir
-  ; Bisherigen Datenordner übernehmen (Update), sonst Dokumente\X-Rechnung
-  ReadINIStr $DATEN "${EINSTELLUNGEN}" "X-Rechnung" "datenordner"
+  ; Bisherigen Datenordner übernehmen (Update), sonst Dokumente\Buchhaltung für KMU
+  ReadINIStr $DATEN "${EINSTELLUNGEN}" "${INI_ABSCHNITT}" "datenordner"
   ${If} $DATEN == ""
-    StrCpy $DATEN "$DOCUMENTS\X-Rechnung"
+    StrCpy $DATEN "$DOCUMENTS\${NAME}"
   ${EndIf}
 !ifndef TESTVERSION
   ; Unbeaufsichtigte Installation:  Setup.exe /S /LIZENZNEHMER=Firma /LIZENZNUMMER=XRK1-…
@@ -192,6 +198,15 @@ Function LizenzSeiteVerlassen
 FunctionEnd
 !endif
 
+Function DatenseiteVorbereiten
+  ; Vorhandene Daten von „X-Rechnung für KMU“ (Kunden, Rechnungen, Lizenz) können weiterverwendet werden
+  StrCpy $DATENHINWEIS ""
+  ${If} ${FileExists} "$DOCUMENTS\X-Rechnung\xrechnung.db"
+  ${AndIf} $DATEN != "$DOCUMENTS\X-Rechnung"
+    StrCpy $DATENHINWEIS "$\r$\n$\r$\nIhre Daten aus „X-Rechnung für KMU“ liegen in $DOCUMENTS\X-Rechnung. Wählen Sie diesen Ordner, um mit Ihren Kunden und Rechnungen weiterzuarbeiten (beide Programme dann nicht gleichzeitig verwenden)."
+  ${EndIf}
+FunctionEnd
+
 Function ProgrammStarten
   Exec '"$INSTDIR\python\pythonw.exe" "$INSTDIR\starter.py"'
 FunctionEnd
@@ -215,6 +230,15 @@ FunctionEnd
     ; Der Starter kehrt erst zurück, wenn der Programmprozess beendet ist.
     ExecWait '"$INSTDIR\python\pythonw.exe" "$INSTDIR\starter.py" --beenden'
   ${EndIf}
+!macroend
+
+!macro IniUnicode DATEI
+  ; Leere INI-Datei mit UTF-16-BOM anlegen: WritePrivateProfileString schreibt dann Unicode
+  ; (sonst ANSI – Umlaute in Pfad oder Lizenznehmer gingen verloren).
+  Delete "${DATEI}"
+  FileOpen $R8 "${DATEI}" w
+  FileWriteWord $R8 0xFEFF
+  FileClose $R8
 !macroend
 
 !macro OrdnerEntfernen ORDNER
@@ -252,7 +276,7 @@ Section "Programm" SecProgramm
 
 !ifndef TESTVERSION
   DetailPrint "Lizenz prüfen …"
-  Delete "$PLUGINSDIR\lizenz.ini"
+  !insertmacro IniUnicode "$PLUGINSDIR\lizenz.ini"
   WriteINIStr "$PLUGINSDIR\lizenz.ini" "Lizenz" "lizenznehmer" "$LizenzName"
   WriteINIStr "$PLUGINSDIR\lizenz.ini" "Lizenz" "lizenznummer" "$LizenzNummer"
   ClearErrors
@@ -277,7 +301,8 @@ Section "Programm" SecProgramm
   !insertmacro OrdnerEntfernen "$INSTDIR\programm"
   !insertmacro OrdnerEntfernen "$INSTDIR\pruefung"
   Delete "$INSTDIR\starter.py"
-  Delete "$INSTDIR\xrechnung.ico"
+  Delete "$INSTDIR\${SYMBOL}"
+  RMDir /r "$INSTDIR\__pycache__"
   DetailPrint "Programmdateien übernehmen …"
   Rename "$INSTDIR\_neu\python" "$INSTDIR\python"
   Rename "$INSTDIR\_neu\programm" "$INSTDIR\programm"
@@ -285,7 +310,7 @@ Section "Programm" SecProgramm
     Rename "$INSTDIR\_neu\pruefung" "$INSTDIR\pruefung"
   ${EndIf}
   Rename "$INSTDIR\_neu\starter.py" "$INSTDIR\starter.py"
-  Rename "$INSTDIR\_neu\xrechnung.ico" "$INSTDIR\xrechnung.ico"
+  Rename "$INSTDIR\_neu\${SYMBOL}" "$INSTDIR\${SYMBOL}"
   RMDir /r "$INSTDIR\_neu"
   ${IfNot} ${FileExists} "$INSTDIR\python\pythonw.exe"
     MessageBox MB_ICONSTOP|MB_OK "Die Programmdateien konnten nicht übernommen werden. Bitte die Installation erneut starten." /SD IDOK
@@ -296,23 +321,24 @@ Section "Programm" SecProgramm
 !ifndef TESTVERSION
   CopyFiles /SILENT "$PLUGINSDIR\lizenz.ini" "$DATEN\lizenz.ini"
 !endif
-  WriteINIStr "${EINSTELLUNGEN}" "X-Rechnung" "datenordner" "$DATEN"
-  WriteINIStr "${EINSTELLUNGEN}" "X-Rechnung" "version" "${VERSION}"
+  !insertmacro IniUnicode "${EINSTELLUNGEN}"
+  WriteINIStr "${EINSTELLUNGEN}" "${INI_ABSCHNITT}" "datenordner" "$DATEN"
+  WriteINIStr "${EINSTELLUNGEN}" "${INI_ABSCHNITT}" "version" "${VERSION}"
 
   ; Verknüpfungen
   SetOutPath "$INSTDIR"
   CreateDirectory "$SMPROGRAMS\${NAME}"
-  CreateShortcut "$SMPROGRAMS\${NAME}\${NAME}.lnk" "$INSTDIR\python\pythonw.exe" '"$INSTDIR\starter.py"' "$INSTDIR\xrechnung.ico" 0 SW_SHOWNORMAL "" "Kunden, Angebote und XRechnungen"
+  CreateShortcut "$SMPROGRAMS\${NAME}\${NAME}.lnk" "$INSTDIR\python\pythonw.exe" '"$INSTDIR\starter.py"' "$INSTDIR\${SYMBOL}" 0 SW_SHOWNORMAL "" "Rechnungen, Belege und EÜR"
   CreateShortcut "$SMPROGRAMS\${NAME}\Datenordner öffnen.lnk" "$DATEN"
   CreateShortcut "$SMPROGRAMS\${NAME}\${NAME} deinstallieren.lnk" "$INSTDIR\Deinstallieren.exe"
-  CreateShortcut "$DESKTOP\${NAME}.lnk" "$INSTDIR\python\pythonw.exe" '"$INSTDIR\starter.py"' "$INSTDIR\xrechnung.ico" 0 SW_SHOWNORMAL "" "Kunden, Angebote und XRechnungen"
+  CreateShortcut "$DESKTOP\${NAME}.lnk" "$INSTDIR\python\pythonw.exe" '"$INSTDIR\starter.py"' "$INSTDIR\${SYMBOL}" 0 SW_SHOWNORMAL "" "Rechnungen, Belege und EÜR"
 
   ; Eintrag unter „Apps & Features“
   WriteUninstaller "$INSTDIR\Deinstallieren.exe"
   WriteRegStr HKCU "${REGKEY}" "DisplayName" "${NAME}${VARIANTE}"
   WriteRegStr HKCU "${REGKEY}" "DisplayVersion" "${VERSION}"
   WriteRegStr HKCU "${REGKEY}" "Publisher" "${FIRMA}"
-  WriteRegStr HKCU "${REGKEY}" "DisplayIcon" "$INSTDIR\xrechnung.ico"
+  WriteRegStr HKCU "${REGKEY}" "DisplayIcon" "$INSTDIR\${SYMBOL}"
   WriteRegStr HKCU "${REGKEY}" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "${REGKEY}" "UninstallString" '"$INSTDIR\Deinstallieren.exe"'
   WriteRegStr HKCU "${REGKEY}" "QuietUninstallString" '"$INSTDIR\Deinstallieren.exe" /S'
@@ -324,7 +350,7 @@ SectionEnd
 ; --- Deinstallation -----------------------------------------------------------------
 Section "Uninstall"
   !insertmacro LaufendeBeenden
-  ReadINIStr $DATEN "${EINSTELLUNGEN}" "X-Rechnung" "datenordner"
+  ReadINIStr $DATEN "${EINSTELLUNGEN}" "${INI_ABSCHNITT}" "datenordner"
 
   Delete "$DESKTOP\${NAME}.lnk"
   RMDir /r "$SMPROGRAMS\${NAME}"
@@ -332,14 +358,15 @@ Section "Uninstall"
   !insertmacro OrdnerEntfernen "$INSTDIR\programm"
   !insertmacro OrdnerEntfernen "$INSTDIR\pruefung"
   RMDir /r "$INSTDIR\_neu"
+  RMDir /r "$INSTDIR\__pycache__"
   Delete "$INSTDIR\starter.py"
-  Delete "$INSTDIR\xrechnung.ico"
+  Delete "$INSTDIR\${SYMBOL}"
   Delete "$INSTDIR\einstellungen.ini"
   Delete "$INSTDIR\Deinstallieren.exe"
   RMDir "$INSTDIR"
   DeleteRegKey HKCU "${REGKEY}"
 
   ${IfNot} ${Silent}
-    MessageBox MB_ICONINFORMATION|MB_OK "${NAME} wurde entfernt.$\r$\n$\r$\nIhre Daten (Datenbank, Angebote, Rechnungen) wurden NICHT gelöscht und bleiben erhalten in:$\r$\n$DATEN$\r$\n$\r$\nBitte beachten Sie die gesetzlichen Aufbewahrungsfristen, bevor Sie diesen Ordner löschen."
+    MessageBox MB_ICONINFORMATION|MB_OK "${NAME} wurde entfernt.$\r$\n$\r$\nIhre Daten (Datenbank, Rechnungen, Belege) wurden NICHT gelöscht und bleiben erhalten in:$\r$\n$DATEN$\r$\n$\r$\nBitte beachten Sie die gesetzlichen Aufbewahrungsfristen, bevor Sie diesen Ordner löschen."
   ${EndIf}
 SectionEnd
