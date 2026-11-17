@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block titel %}EÜR {{ erg.jahr }} – {{ PROGRAMM_NAME }}{% endblock %}
+{% block inhalt %}
+<div class="seitenkopf">
+  <h1>Einnahmen-Überschuss-Rechnung {{ erg.jahr }}</h1>
+  <div class="knopfgruppe umbruch-erlaubt nicht-drucken">
+    <form method="get"><select name="jahr" aria-label="Jahr" onchange="this.form.submit()" class="schmal">
+      {% for j in jahre %}<option {% if j == erg.jahr %}selected{% endif %}>{{ j }}</option>{% endfor %}
+    </select></form>
+    <a class="knopf" href="{{ url_for('euer.csv', jahr=erg.jahr) }}">CSV</a>
+    <a class="knopf knopf-primaer" href="{{ url_for('euer.als_pdf', jahr=erg.jahr) }}" target="_blank">PDF</a>
+  </div>
+</div>
+
+<div class="kennzahlen kennzahlen-3">
+  <div><strong>{{ erg.summe_einnahmen|cent }}</strong><span>Betriebseinnahmen</span></div>
+  <div><strong>{{ erg.summe_ausgaben|cent }}</strong><span>Betriebsausgaben</span></div>
+  <div class="{% if erg.gewinn < 0 %}rot{% endif %}"><strong>{{ erg.gewinn|cent }}</strong><span>{{ 'Gewinn' if erg.gewinn >= 0 else 'Verlust' }}</span></div>
+</div>
+
+{% for h in erg.hinweise %}<div class="hinweisbox">{{ h }} <a href="{{ url_for('belege.liste', jahr=erg.jahr) }}">Zu den Belegen</a></div>{% endfor %}
+
+<div class="spalten">
+  <section class="karte">
+    <h2>Betriebseinnahmen</h2>
+    <table class="tabelle euer-tabelle">
+      <tbody>
+      {% for z in erg.einnahmen %}<tr><td>{{ z.text }}{% if z.hinweis %}<div class="gedimmt klein">{{ z.hinweis }}</div>{% endif %}</td><td class="rechts">{{ z.cent|cent }}</td></tr>
+      {% else %}<tr><td class="gedimmt">Keine Einnahmen mit Zahlung in {{ erg.jahr }}.</td><td></td></tr>{% endfor %}
+      </tbody>
+      <tfoot><tr><th>Summe Betriebseinnahmen</th><th class="rechts">{{ erg.summe_einnahmen|cent }}</th></tr></tfoot>
+    </table>
+  </section>
+  <section class="karte">
+    <h2>Betriebsausgaben</h2>
+    <table class="tabelle euer-tabelle">
+      <tbody>
+      {% for z in erg.ausgaben %}<tr><td>{{ z.text }}{% if z.hinweis %}<div class="gedimmt klein">{{ z.hinweis }}</div>{% endif %}</td><td class="rechts">{{ z.cent|cent }}</td></tr>
+      {% else %}<tr><td class="gedimmt">Keine Ausgaben in {{ erg.jahr }}.</td><td></td></tr>{% endfor %}
+      </tbody>
+      <tfoot><tr><th>Summe Betriebsausgaben</th><th class="rechts">{{ erg.summe_ausgaben|cent }}</th></tr></tfoot>
+    </table>
+  </section>
+</div>
+
+{% if erg.anlagen %}
+<section class="karte">
+  <h2>Anlagenverzeichnis {{ erg.jahr }}</h2>
+  <div class="tabelle-rahmen"><table class="tabelle">
+    <thead><tr><th>Beleg</th><th>Bezeichnung</th><th>Anschaffung</th><th class="rechts">AK</th><th class="rechts">ND</th>
+      <th class="rechts">AfA bisher</th><th class="rechts">AfA {{ erg.jahr }}</th><th class="rechts">Restwert 31.12.</th></tr></thead>
+    <tbody>{% for a in erg.anlagen %}<tr>
+      <td class="mono"><a href="{{ url_for('belege.detail', beleg_id=a.beleg_id) }}">{{ a.belegnummer }}</a></td><td>{{ a.beschreibung }}</td>
+      <td>{{ a.anschaffung|datum }}</td><td class="rechts">{{ a.ak_cent|cent }}</td><td class="rechts">{{ a.nutzungsdauer }} J.</td>
+      <td class="rechts">{{ a.afa_bisher|cent }}</td><td class="rechts zahl-fett">{{ a.afa_jahr|cent }}</td><td class="rechts">{{ a.restwert|cent }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endif %}
+
+<section class="karte">
+  <h2>Monatswerte (Zahlungen, brutto) – Grundlage für die Umsatzsteuer-Voranmeldung</h2>
+  <div class="tabelle-rahmen"><table class="tabelle">
+    <thead><tr><th>Monat</th><th class="rechts">Einnahmen</th><th class="rechts">Ausgaben</th><th class="rechts">USt</th><th class="rechts">Vorsteuer</th><th class="rechts">Zahllast</th></tr></thead>
+    <tbody>{% for m in erg.monate %}<tr><td>{{ m.monat }}</td><td class="rechts">{{ m.einnahmen|cent }}</td><td class="rechts">{{ m.ausgaben|cent }}</td>
+      <td class="rechts">{{ m.ust|cent }}</td><td class="rechts">{{ m.vorsteuer|cent }}</td><td class="rechts">{{ (m.ust - m.vorsteuer)|cent }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <p class="gedimmt klein">Nach Zahlungsdatum (Ist-Versteuerung). Bei Soll-Versteuerung gilt für die Umsatzsteuer das Leistungsdatum.</p>
+</section>
+
+<p class="gedimmt klein">Zufluss-/Abflussprinzip (§ 11 EStG); GWG und AfA im Jahr der Anschaffung bzw. monatsgenau.
+  {% if erg.kleinunternehmer %}Kleinunternehmer (§ 19 UStG): Ausgaben brutto, keine Vorsteuer.{% endif %}
+  Die Zuordnung zu den Zeilen der Anlage EÜR bitte mit der Steuerberatung abstimmen.</p>
+{% endblock %}

@@ -17,7 +17,7 @@
 <div class="kennzahlen kennzahlen-3">
   <div><strong>{{ kennzahlen.einnahmen|cent }}</strong><span>Einnahmen {{ filter.jahr }} (bezahlt, brutto)</span></div>
   <div><strong>{{ kennzahlen.ausgaben|cent }}</strong><span>Ausgaben {{ filter.jahr }} (bezahlt, brutto)</span></div>
-  <div class="{% if kennzahlen.saldo < 0 %}rot{% endif %}"><strong>{{ kennzahlen.saldo|cent }}</strong><span>Saldo</span></div>
+  <div class="{% if kennzahlen.saldo < 0 %}rot{% endif %}"><strong>{{ kennzahlen.saldo|cent }}</strong><span>Saldo · <a href="{{ url_for('euer.seite', jahr=filter.jahr) }}">zur EÜR</a></span></div>
 </div>
 {% if kennzahlen.entwuerfe or kennzahlen.offen %}
 <p class="hinweis-inline gedimmt">

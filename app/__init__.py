@@ -49,6 +49,7 @@ def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None) -> F
 
     from .angebote import bp as angebote_bp
     from .belege import bp as belege_bp
+    from .euer import bp as euer_bp
     from .einstellungen import bp as einstellungen_bp
     from .kunden import bp as kunden_bp
     from .leistungen import bp as leistungen_bp
@@ -60,6 +61,7 @@ def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None) -> F
     app.register_blueprint(angebote_bp)
     app.register_blueprint(rechnungen_bp)
     app.register_blueprint(belege_bp)
+    app.register_blueprint(euer_bp)
     app.register_blueprint(einstellungen_bp)
 
     # Solange die Datenbank gesperrt ist, führt jede Seite zur Passworteingabe
