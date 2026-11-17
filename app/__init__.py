@@ -1,6 +1,7 @@
-"""X-Rechnung für KMU – Flask-Anwendung."""
+"""Buchhaltung für KMU – Flask-Anwendung (Kunden, Angebote, Rechnungen mit XRechnung, Belegerfassung, EÜR)."""
 
-__version__ = "1.1.0"
+__version__ = "1.0.0"
+PROGRAMM_NAME = "Buchhaltung für KMU"
 
 import os
 import secrets
@@ -13,7 +14,7 @@ from flask import Flask, abort, flash, jsonify, redirect, request, url_for
 from . import db, lizenz
 
 
-APP_KENNUNG = "xrechnung-kmu"
+APP_KENNUNG = "buchhaltung-kmu"
 
 
 def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None) -> Flask:
@@ -32,7 +33,7 @@ def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None) -> F
         DATENVERZEICHNIS=daten,
         DATENBANK=daten / "xrechnung.db",
         SECRET_KEY=schluessel_datei.read_text(encoding="utf-8").strip(),
-        # Obergrenze für Uploads (Logo max. 5 MB + Formularanteil)
+        # Obergrenze für Uploads (Logo max. 5 MB + Formularanteil); Belege: siehe _upload_grenze
         MAX_CONTENT_LENGTH=6 * 1024 * 1024,
     )
 
@@ -69,6 +70,19 @@ def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None) -> F
             return redirect(url_for("einstellungen.entsperren", weiter=weiter.rstrip("?")))
         return None
 
+    @app.before_request
+    def _fremde_formulare_abweisen():
+        """Schutz vor Formularen fremder Webseiten (CSRF): Browser senden bei POST die Herkunft mit.
+        Stimmt sie nicht mit diesem Programm überein, wird die Anfrage abgewiesen."""
+        if request.method != "POST":
+            return None
+        herkunft = request.headers.get("Origin") or request.headers.get("Referer")
+        if herkunft and herkunft != "null" and urlparse(herkunft).netloc != request.host:
+            abort(403)
+        if herkunft == "null":
+            abort(403)
+        return None
+
     @app.errorhandler(413)
     def zu_gross(_e):
         flash("Die Datei ist zu groß (höchstens 5 MB).", "fehler")
@@ -89,7 +103,7 @@ def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None) -> F
 
     @app.context_processor
     def _programm():
-        return {"PROGRAMM_VERSION": __version__, "DESKTOP": beenden is not None,
+        return {"PROGRAMM_VERSION": __version__, "PROGRAMM_NAME": PROGRAMM_NAME, "DESKTOP": beenden is not None,
                 "DATENORDNER": str(app.config["DATENVERZEICHNIS"]), "LIZENZ": aktive_lizenz(app),
                 "VERSCHLUESSELT": app.config["DB_PASSWORT"] is not None, "GESPERRT": app.config["GESPERRT"]}
 
@@ -109,7 +123,8 @@ def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None) -> F
         beenden()
         return ("<!doctype html><meta charset='utf-8'><title>Beendet</title>"
                 "<body style='font-family:system-ui;padding:3rem;color:#1d2420'>"
-                "<h1>X-Rechnung für KMU wurde beendet.</h1><p>Sie können dieses Browserfenster schließen.</p>")
+                f"<h1>{PROGRAMM_NAME} wurde beendet.</h1>"
+                "<p>Sie können dieses Browserfenster schließen.</p>")
 
     @app.get("/")
     def start():

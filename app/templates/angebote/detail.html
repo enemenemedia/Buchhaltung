@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_protokoll.html" import protokoll_liste %}
-{% block titel %}Angebot {{ a.nummer }} – X-Rechnung für KMU{% endblock %}
+{% block titel %}Angebot {{ a.nummer }} – {{ PROGRAMM_NAME }}{% endblock %}
 
 {% set st = angebot_status(a) %}
 {% set netto_ausweis = a.preisausweis == 'netto' and not a.kleinunternehmer %}

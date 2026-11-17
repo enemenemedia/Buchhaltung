@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Entsperren – X-Rechnung für KMU</title>
+  <title>Entsperren – {{ PROGRAMM_NAME }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -12,7 +12,7 @@
       <span class="marke">X-Rechnung <span>für KMU</span></span>
       {% if DESKTOP %}
       <div class="kopf-rechts">
-        <form method="post" action="{{ url_for('system_beenden') }}" onsubmit="return confirm('X-Rechnung für KMU beenden?')">
+        <form method="post" action="{{ url_for('system_beenden') }}" onsubmit="return confirm('{{ PROGRAMM_NAME }} beenden?')">
           <button type="submit" class="beenden-knopf" title="Programm beenden">Beenden</button>
         </form>
       </div>

@@ -24,3 +24,13 @@ def test_beenden_nur_von_eigener_seite(tmp_path):
     assert b"beenden-knopf" in client.get("/kunden/").data
     antwort = client.post("/system/beenden", headers={"Origin": "http://localhost"})
     assert antwort.status_code == 200 and aufrufe == [1]
+
+
+def test_formulare_fremder_webseiten_werden_abgewiesen(tmp_path):
+    """CSRF-Schutz: Ein POST mit fremder Herkunft wird abgewiesen, die eigene Oberfläche nicht."""
+    c = create_app(tmp_path).test_client()
+    daten = {"firma": "Musterkunde GmbH", "land": "DE"}
+    assert c.post("/kunden/neu", data=daten, headers={"Origin": "https://boese.example"}).status_code == 403
+    assert c.post("/kunden/neu", data=daten, headers={"Referer": "https://boese.example/seite"}).status_code == 403
+    assert c.post("/kunden/neu", data=daten, headers={"Origin": "null"}).status_code == 403
+    assert c.post("/kunden/neu", data=daten, headers={"Origin": "http://localhost"}).status_code != 403

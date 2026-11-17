@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_protokoll.html" import protokoll_liste %}
-{% block titel %}{{ 'Neue Leistung' if neu else leistung.bezeichnung }} – X-Rechnung für KMU{% endblock %}
+{% block titel %}{{ 'Neue Leistung' if neu else leistung.bezeichnung }} – {{ PROGRAMM_NAME }}{% endblock %}
 
 {% macro fehlertext(name) -%}
   {% if fehler.get(name) %}<small class="fehlertext">{{ fehler[name] }}</small>{% endif %}

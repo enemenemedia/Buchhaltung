@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block titel %}Leistungen importieren – X-Rechnung für KMU{% endblock %}
+{% block titel %}Leistungen importieren – {{ PROGRAMM_NAME }}{% endblock %}
 
 {% set STATUS = {'neu': ('Neu', 'aktiv'), 'aktualisieren': ('Änderung', 'warn'), 'unveraendert': ('Unverändert', 'archiv'),
                  'fehler': ('Fehler', 'fehler'), 'doppelt': ('Doppelt', 'fehler')} %}

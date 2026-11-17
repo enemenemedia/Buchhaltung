@@ -22,7 +22,7 @@ from reportlab.pdfgen import canvas as rl_canvas
 from reportlab.platypus import (BaseDocTemplate, Frame, KeepTogether, NextPageTemplate, PageTemplate,
                                 Paragraph, Spacer, Table, TableStyle)
 
-from .. import berechnung, zahlen
+from .. import PROGRAMM_NAME, berechnung, zahlen
 from ..leistungen import service as leistungen
 from ..stammdaten import service as stammdaten
 
@@ -303,7 +303,7 @@ class Belegdokument:
         puffer = io.BytesIO()
         doc = BaseDocTemplate(
             puffer, pagesize=A4, title=f"{self.belegart} {self.a['nummer']}", author=self.e["firma"],
-            subject=self.a["betreff"] or f"{self.belegart} {self.a['nummer']}", creator="X-Rechnung für KMU",
+            subject=self.a["betreff"] or f"{self.belegart} {self.a['nummer']}", creator=PROGRAMM_NAME,
         )
         unten = FUSS_HOEHE + 6 * mm
         erste = Frame(RAND_LINKS, unten, INHALT_BREITE, HOEHE - 100 * mm - unten, id="erste",

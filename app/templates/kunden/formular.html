@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block titel %}{{ 'Neuer Kunde' if neu else 'Kunde bearbeiten' }} – X-Rechnung für KMU{% endblock %}
+{% block titel %}{{ 'Neuer Kunde' if neu else 'Kunde bearbeiten' }} – {{ PROGRAMM_NAME }}{% endblock %}
 
 {% macro feld(name, label, typ='text', breite='', pflicht=false, hilfe='', attrs='') -%}
   <label class="feld {{ breite }} {% if fehler.get(name) %}hat-fehler{% endif %}">

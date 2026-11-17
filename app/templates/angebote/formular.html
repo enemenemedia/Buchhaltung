@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_positionen.html" import fehlertext, positionen_bereich with context %}
-{% block titel %}{{ 'Angebot ' ~ angebot.nummer if angebot else 'Neues Angebot' }} – X-Rechnung für KMU{% endblock %}
+{% block titel %}{{ 'Angebot ' ~ angebot.nummer if angebot else 'Neues Angebot' }} – {{ PROGRAMM_NAME }}{% endblock %}
 
 
 {% block inhalt %}

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_protokoll.html" import protokoll_liste %}
-{% block titel %}Stammdaten – X-Rechnung für KMU{% endblock %}
+{% block titel %}Stammdaten – {{ PROGRAMM_NAME }}{% endblock %}
 
 {% set XR_FELDER = fehlend | map(attribute='feld') | list %}
 

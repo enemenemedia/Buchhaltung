@@ -2,7 +2,7 @@
 {% from "_protokoll.html" import protokoll_liste %}
 {% set belegart = RECHNUNG_ARTEN[r.art] %}
 {% set titel = belegart ~ ' ' ~ r.nummer if r.nummer else 'Entwurf ' ~ belegart ~ ' #' ~ r.id %}
-{% block titel %}{{ titel }} – X-Rechnung für KMU{% endblock %}
+{% block titel %}{{ titel }} – {{ PROGRAMM_NAME }}{% endblock %}
 {% set st = rechnung_status(r) %}
 {% set bereit = pruefliste and (pruefliste|rejectattr('ok')|list|length == 0) %}
 {% set kann_folgen = r.status != 'entwurf' and r.art != 'storno' and not r.folge_id %}

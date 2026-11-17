@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "_positionen.html" import fehlertext, positionen_bereich with context %}
 {% set korrektur = rechnung and rechnung.art == 'korrektur' %}
-{% block titel %}{{ 'Rechnungskorrektur bearbeiten' if korrektur else ('Rechnung bearbeiten' if rechnung else 'Neue Rechnung') }} – X-Rechnung für KMU{% endblock %}
+{% block titel %}{{ 'Rechnungskorrektur bearbeiten' if korrektur else ('Rechnung bearbeiten' if rechnung else 'Neue Rechnung') }} – {{ PROGRAMM_NAME }}{% endblock %}
 
 {% macro feld(name, label, typ='text', breite='s6', pflicht=false, hilfe='', attrs='') -%}
   <label class="feld {{ breite }} {% if fehler.get(name) %}hat-fehler{% endif %}">

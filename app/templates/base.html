@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block titel %}X-Rechnung für KMU{% endblock %}</title>
+  <title>{% block titel %}{{ PROGRAMM_NAME }}{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <header class="kopf">
     <div class="kopf-innen">
-      <a class="marke" href="{{ url_for('start') }}">X-Rechnung <span>für KMU</span></a>
+      <a class="marke" href="{{ url_for('start') }}">Buchhaltung <span>für KMU</span></a>
       <nav class="hauptnav">
         <a href="{{ url_for('stammdaten.seite') }}" class="{% if request.blueprint == 'stammdaten' %}aktiv{% endif %}">Stammdaten</a>
         <a href="{{ url_for('kunden.liste') }}" class="{% if request.blueprint == 'kunden' %}aktiv{% endif %}">Kunden</a>
@@ -26,7 +26,7 @@
         {% endif %}
         {% if DESKTOP %}
         <form method="post" action="{{ url_for('system_beenden') }}"
-              onsubmit="return confirm('X-Rechnung für KMU beenden?')">
+              onsubmit="return confirm('{{ PROGRAMM_NAME }} beenden?')">
           <button type="submit" class="beenden-knopf" title="Programm beenden">Beenden</button>
         </form>
         {% endif %}
@@ -49,7 +49,7 @@
     {% block inhalt %}{% endblock %}
   </main>
   <footer class="fuss">
-    <span>X-Rechnung für KMU {{ PROGRAMM_VERSION }} ·
+    <span>{{ PROGRAMM_NAME }} {{ PROGRAMM_VERSION }} ·
       {% if LIZENZ %}lizenziert für {{ LIZENZ.lizenznehmer }}{% else %}Testversion{% endif %}</span>
     <span>Datenordner: <span class="mono">{{ DATENORDNER }}</span></span>
   </footer>

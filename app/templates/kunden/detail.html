@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_protokoll.html" import protokoll_liste %}
-{% block titel %}{{ kunde.firma }} – X-Rechnung für KMU{% endblock %}
+{% block titel %}{{ kunde.firma }} – {{ PROGRAMM_NAME }}{% endblock %}
 {% block inhalt %}
 <p class="brotkrumen"><a href="{{ url_for('kunden.liste', status='archiviert' if kunde.archiviert_am else 'aktiv') }}">← Kunden</a></p>
 
