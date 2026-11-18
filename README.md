@@ -41,7 +41,7 @@ mit mehreren Threads) mit selbst erzeugter Zertifizierungsstelle und Serverzerti
 | `netzwerk/Dockerfile`, `netzwerk/entrypoint.sh` | Image auf Basis `python:3.12-slim`, läuft als `PUID`/`PGID` statt root |
 | `netzwerk/docker-compose.yml` | Vorlage für Server/NAS |
 | `netzwerk/ANLEITUNG.md` | Installation, Einrichtung, Zertifikat importieren, Sicherung, Umzug |
-| `.github/workflows/netzwerk-image.yml` | baut bei Tag `v*` das Image (amd64 + arm64) nach `ghcr.io/enemenemedia/buchhaltung` |
+| `.github/workflows/netzwerk-image.yml` | baut bei jeder Änderung auf `main` das Image (amd64 + arm64, Version aus `__version__`) nach `ghcr.io/enemenemedia/buchhaltung` |
 | `werkzeuge/netzwerk_paket.py` | erzeugt `dist/Buchhaltung-fuer-KMU-Netzwerk-<Version>.zip` |
 
 ```sh
