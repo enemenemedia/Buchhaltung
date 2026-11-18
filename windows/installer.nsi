@@ -7,6 +7,7 @@
 ;   (in einen Zwischenordner) vom mitgelieferten Python geprüft; erst danach wird etwas installiert.
 ;   Ist sie ungültig, bleibt eine vorhandene Installation unverändert.
 ; - Testversion (-DTESTVERSION): ohne Lizenznummer; das Programm erstellt keine XRechnung (XML).
+; - Ohne Lizenzpflicht (-DOHNE_LIZENZ, Standard seit 1.1): keine Lizenzseite, volle Funktion.
 ;   Eine Lizenznummer kann später im Programm unter „Einstellungen“ eingegeben werden.
 ;
 ; - Installation ohne Administratorrechte für den angemeldeten Benutzer
@@ -30,6 +31,12 @@ ManifestDPIAware true
   !define VARIANTE ""
   !define DATEINAME "Buchhaltung-fuer-KMU-Setup-${VERSION}.exe"
 !endif
+; Lizenzseite und -prüfung nur in der Vollversion mit Lizenzpflicht
+!ifndef TESTVERSION
+  !ifndef OHNE_LIZENZ
+    !define MIT_LIZENZ
+  !endif
+!endif
 !define REGKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\BuchhaltungKMU"
 !define EINSTELLUNGEN "$INSTDIR\einstellungen.ini"
 !define INI_ABSCHNITT "Buchhaltung"
@@ -52,7 +59,7 @@ VIAddVersionKey /LANG=1031 "LegalCopyright" "MIT-Lizenz"
 
 Var DATEN
 Var DATENHINWEIS
-!ifndef TESTVERSION
+!ifdef MIT_LIZENZ
 Var LizenzName
 Var LizenzNummer
 Var FeldName
@@ -72,6 +79,8 @@ Var FeldNummer
 !define MUI_WELCOMEPAGE_TITLE "Willkommen bei ${NAME} ${VERSION}${VARIANTE}"
 !ifdef TESTVERSION
 !define MUI_WELCOMEPAGE_TEXT "Dieser Assistent installiert die Testversion von ${NAME} – Kunden, Angebote und Rechnungen mit PDF, Belegerfassung und Einnahmen-Überschuss-Rechnung.$\r$\n$\r$\nIn der Testversion sind alle Funktionen nutzbar, XRechnungen (XML) werden jedoch nicht erstellt. Mit einer Lizenznummer (im Programm unter „Einstellungen“) wird daraus die Vollversion – ohne Neuinstallation und ohne Datenverlust.$\r$\n$\r$\nDie Installation benötigt keine Administratorrechte."
+!else ifdef OHNE_LIZENZ
+!define MUI_WELCOMEPAGE_TEXT "Dieser Assistent installiert ${NAME} – Kunden, Angebote und Rechnungen mit XRechnung und PDF, Belegerfassung mit Tags und Einnahmen-Überschuss-Rechnung (EÜR).$\r$\n$\r$\nDie Installation benötigt keine Administratorrechte. Python und alle benötigten Komponenten sind enthalten.$\r$\n$\r$\nKlicken Sie auf „Weiter“, um fortzufahren."
 !else
 !define MUI_WELCOMEPAGE_TEXT "Dieser Assistent installiert ${NAME} – Kunden, Angebote und Rechnungen mit XRechnung und PDF, Belegerfassung und Einnahmen-Überschuss-Rechnung (EÜR).$\r$\n$\r$\nFür die Installation benötigen Sie Ihre Lizenznummer. Die Installation benötigt keine Administratorrechte. Python und alle benötigten Komponenten sind enthalten.$\r$\n$\r$\nKlicken Sie auf „Weiter“, um fortzufahren."
 !endif
@@ -92,7 +101,7 @@ Var FeldNummer
 !define MUI_PAGE_CUSTOMFUNCTION_LEAVE DatenordnerPruefen
 !insertmacro MUI_PAGE_DIRECTORY
 
-!ifndef TESTVERSION
+!ifdef MIT_LIZENZ
 Page custom LizenzSeite LizenzSeiteVerlassen
 !endif
 
@@ -118,7 +127,7 @@ Function .onInit
   ${If} $DATEN == ""
     StrCpy $DATEN "$DOCUMENTS\${NAME}"
   ${EndIf}
-!ifndef TESTVERSION
+!ifdef MIT_LIZENZ
   ; Unbeaufsichtigte Installation:  Setup.exe /S /LIZENZNEHMER=Firma /LIZENZNUMMER=XRK1-…
   ${GetParameters} $0
   ClearErrors
@@ -139,7 +148,7 @@ Function .onInit
 !endif
 FunctionEnd
 
-!ifndef TESTVERSION
+!ifdef MIT_LIZENZ
 Function LizenzSeite
   !insertmacro MUI_HEADER_TEXT "Lizenz" "Bitte geben Sie Ihre Lizenz ein."
   ; Bei einer Aktualisierung die vorhandene Lizenz aus dem Datenordner vorschlagen
@@ -274,7 +283,7 @@ Section "Programm" SecProgramm
   SetOutPath "$INSTDIR\_neu"
   File /r "${INHALT}\*.*"
 
-!ifndef TESTVERSION
+!ifdef MIT_LIZENZ
   DetailPrint "Lizenz prüfen …"
   !insertmacro IniUnicode "$PLUGINSDIR\lizenz.ini"
   WriteINIStr "$PLUGINSDIR\lizenz.ini" "Lizenz" "lizenznehmer" "$LizenzName"
@@ -318,7 +327,7 @@ Section "Programm" SecProgramm
   ${EndIf}
 
   CreateDirectory "$DATEN"
-!ifndef TESTVERSION
+!ifdef MIT_LIZENZ
   CopyFiles /SILENT "$PLUGINSDIR\lizenz.ini" "$DATEN\lizenz.ini"
 !endif
   !insertmacro IniUnicode "${EINSTELLUNGEN}"

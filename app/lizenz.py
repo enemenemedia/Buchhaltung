@@ -27,6 +27,11 @@ from pathlib import Path
 
 # Öffentlicher Schlüssel (Ed25519, Base64). Der zugehörige private Schlüssel gehört NICHT
 # ins Repository. Neues Schlüsselpaar: python werkzeuge/lizenz_erzeugen.py schluessel …
+# Lizenzpflicht vorerst abgeschaltet (Version 1.1): XRechnungen werden immer erstellt, das Setup
+# fragt keine Lizenznummer ab. Zum Wiedereinschalten auf True setzen und mit
+# „windows/bauen.py --variante beide“ die Voll- und Testversion bauen.
+LIZENZPFLICHT = False
+
 OEFFENTLICHER_SCHLUESSEL = "D/7+29Y9pyVaUnUB0gDzXdDmVI+GsQaqVeo+GtBNpPc="
 
 PRAEFIX = "XRK1"

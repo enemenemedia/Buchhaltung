@@ -5,11 +5,12 @@
 <div class="seitenkopf">
   <div>
     <h1>Einstellungen</h1>
-    <p class="untertitel">Lizenz und Schutz der Datenbank durch ein Passwort.</p>
+    <p class="untertitel">{% if LIZENZPFLICHT %}Lizenz und {% endif %}Schutz der Datenbank durch ein Passwort.</p>
   </div>
 </div>
 
 <div class="spalten">
+  {% if LIZENZPFLICHT %}
   <section class="karte" id="lizenz">
     <h2>Lizenz</h2>
     {% if lizenz %}
@@ -47,6 +48,7 @@
         </form>
     {% if lizenz %}</details>{% else %}</div>{% endif %}
   </section>
+  {% endif %}
 
   <section class="karte" id="verschluesselung">
     <h2>Verschlüsselung der Datenbank</h2>

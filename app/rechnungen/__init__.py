@@ -5,7 +5,7 @@ from datetime import date
 from flask import (Blueprint, Response, abort, current_app, flash, redirect, render_template, request,
                    send_file, url_for)
 
-from .. import aktive_lizenz
+from .. import xrechnung_erlaubt
 from .. import positionen as pos
 from ..db import get_db
 from ..leistungen import service as leistungen
@@ -155,7 +155,7 @@ def korrigieren(rechnung_id: int):
 @bp.post("/<int:rechnung_id>/abschliessen")
 def abschliessen(rechnung_id: int):
     r = _laden_oder_404(rechnung_id)
-    lizenziert = aktive_lizenz() is not None
+    lizenziert = xrechnung_erlaubt()
     try:
         xml, _pdf = service.abschliessen(get_db(), _verzeichnis(), rechnung_id, mit_xml=lizenziert)
         if lizenziert:
@@ -173,7 +173,7 @@ def abschliessen(rechnung_id: int):
 @bp.post("/<int:rechnung_id>/xrechnung-erstellen")
 def xml_nachholen(rechnung_id: int):
     _laden_oder_404(rechnung_id)
-    if aktive_lizenz() is None:
+    if not xrechnung_erlaubt():
         flash("In der Testversion werden keine XRechnungen erstellt. Bitte zuerst eine Lizenznummer eingeben.",
               "fehler")
         return redirect(url_for("einstellungen.seite") + "#lizenz")

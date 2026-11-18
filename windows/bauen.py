@@ -10,7 +10,10 @@ Läuft unter Linux (getestet: Ubuntu 24.04) – kein Windows nötig:
 
 Voraussetzungen:  apt install nsis   ·   micromamba (wird bei Bedarf geladen)
 Aufruf:
-  python3 windows/bauen.py [--pruefung <Ordner mit Prüfartefakten>] [--ausgabe dist] [--variante voll|test|beide]
+  python3 windows/bauen.py [--pruefung <Ordner mit Prüfartefakten>] [--ausgabe dist] [--variante frei|voll|test|beide]
+
+  Standard ist „frei“ (ohne Lizenzpflicht, siehe app/lizenz.LIZENZPFLICHT): ein Setup ohne Lizenzseite.
+  „voll“, „test“ und „beide“ bauen die Varianten mit Lizenzprüfung.
 
 Die Prüfartefakte erzeugt werkzeuge/pruefung_einrichten.py. Ohne --pruefung wird der
 Installer ohne eingebaute XRechnung-Prüfung gebaut (die Erzeugung funktioniert trotzdem).
@@ -156,11 +159,14 @@ def main() -> int:
     p.add_argument("--pruefung", help="Ordner mit den Prüfartefakten (siehe werkzeuge/pruefung_einrichten.py)")
     p.add_argument("--ausgabe", default=str(REPO / "dist"))
     p.add_argument("--arbeit", default=str(REPO / "build" / "windows"))
-    p.add_argument("--variante", choices=("voll", "test", "beide"), default="beide")
+    p.add_argument("--variante", choices=("frei", "voll", "test", "beide"), default="frei")
     a = p.parse_args()
     sys.path.insert(0, str(REPO))
     from app import lizenz
-    if a.variante != "test" and not lizenz.OEFFENTLICHER_SCHLUESSEL:
+    if a.variante == "frei" and lizenz.LIZENZPFLICHT:
+        print("app/lizenz.py: LIZENZPFLICHT ist eingeschaltet – bitte --variante voll|test|beide bauen.")
+        return 1
+    if a.variante in ("voll", "beide") and not lizenz.OEFFENTLICHER_SCHLUESSEL:
         print("In app/lizenz.py ist kein öffentlicher Schlüssel hinterlegt – siehe werkzeuge/lizenz_erzeugen.py.")
         return 1
     if not shutil.which("makensis"):
@@ -204,6 +210,7 @@ def main() -> int:
     varianten = {"voll": [("", f"Buchhaltung-fuer-KMU-Setup-{v}.exe")],
                  "test": [("-DTESTVERSION", f"Buchhaltung-fuer-KMU-Testversion-Setup-{v}.exe")]}
     varianten["beide"] = varianten["voll"] + varianten["test"]
+    varianten["frei"] = [("-DOHNE_LIZENZ", f"Buchhaltung-fuer-KMU-Setup-{v}.exe")]
     print()
     for schalter, name in varianten[a.variante]:
         subprocess.run(["makensis", "-V2", f"-DVERSION={v}", f"-DINHALT={inhalt}", f"-DAUSGABE={ausgabe}",

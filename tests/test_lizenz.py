@@ -10,6 +10,13 @@ from app.rechnungen import service
 from app.stammdaten import service as stammdaten
 from tests.test_rechnungen import STAMMDATEN, beratung, formular, kunde, pos  # noqa: F401 (Fixtures)
 
+
+@pytest.fixture(autouse=True)
+def lizenzpflicht(monkeypatch):
+    """Diese Tests prüfen den Betrieb mit Lizenzpflicht (Voll-/Testversion). Seit 1.1 ist sie
+    vorerst abgeschaltet (lizenz.LIZENZPFLICHT = False) – hier wird sie eingeschaltet."""
+    monkeypatch.setattr(lizenz, "LIZENZPFLICHT", True)
+
 NAME = "Bäckerei Sonnenschein GmbH"
 
 
@@ -261,3 +268,16 @@ def test_abgelaufene_lizenz_ist_testversion(app, client, lizenzieren):
     assert "testlizenz-band" not in client.get("/kunden/").get_data(as_text=True)
     object.__setattr__(app.config["LIZENZ"], "gueltig_bis", date.today() - timedelta(days=1))
     assert "testlizenz-band" in client.get("/kunden/").get_data(as_text=True)
+
+
+def test_ohne_lizenzpflicht_immer_xrechnung(client, verz, con, kunde, beratung, monkeypatch):
+    """Standard seit 1.1: keine Lizenzpflicht – kein Testversion-Hinweis, XRechnung wird erstellt."""
+    monkeypatch.setattr(lizenz, "LIZENZPFLICHT", False)
+    html = client.get("/kunden/").get_data(as_text=True)
+    assert "testlizenz-band" not in html and "Testversion" not in html
+    assert 'id="lizenz"' not in client.get("/einstellungen/").get_data(as_text=True)
+    rid = _entwurf(client, kunde, beratung)
+    assert "Abschließen &amp; XRechnung erstellen" in client.get(f"/rechnungen/{rid}").get_data(as_text=True)
+    client.post(f"/rechnungen/{rid}/abschliessen")
+    r = service.laden(con, rid)
+    assert not r["xml_ausstehend"] and service.dateien(verz, r)["xml"].is_file()

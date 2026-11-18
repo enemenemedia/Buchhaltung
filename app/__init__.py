@@ -118,6 +118,7 @@ def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None) -> F
     def _programm():
         return {"PROGRAMM_VERSION": __version__, "PROGRAMM_NAME": PROGRAMM_NAME, "DESKTOP": beenden is not None,
                 "DATENORDNER": str(app.config["DATENVERZEICHNIS"]), "LIZENZ": aktive_lizenz(app),
+                "LIZENZPFLICHT": lizenz.LIZENZPFLICHT, "XRECHNUNG_ERLAUBT": xrechnung_erlaubt(app),
                 "VERSCHLUESSELT": app.config["DB_PASSWORT"] is not None, "GESPERRT": app.config["GESPERRT"]}
 
     @app.get("/system/kennung")
@@ -148,6 +149,11 @@ def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None) -> F
         return redirect(url_for("kunden.liste"))
 
     return app
+
+
+def xrechnung_erlaubt(app: Flask | None = None) -> bool:
+    """Darf die XRechnung (XML) erstellt werden? Ohne Lizenzpflicht immer."""
+    return not lizenz.LIZENZPFLICHT or aktive_lizenz(app) is not None
 
 
 def aktive_lizenz(app: Flask | None = None) -> "lizenz.Lizenz | None":

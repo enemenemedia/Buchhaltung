@@ -36,7 +36,7 @@
     </div>
   </header>
 
-  {% if not LIZENZ %}
+  {% if LIZENZPFLICHT and not LIZENZ %}
   <div class="testlizenz-band" role="note">
     <strong>Testversion</strong> – alle Funktionen sind nutzbar, XRechnungen (XML) werden jedoch nicht erstellt.
     <a href="{{ url_for('einstellungen.seite') }}#lizenz">Lizenznummer eingeben</a>
@@ -51,8 +51,8 @@
     {% block inhalt %}{% endblock %}
   </main>
   <footer class="fuss">
-    <span>{{ PROGRAMM_NAME }} {{ PROGRAMM_VERSION }} ·
-      {% if LIZENZ %}lizenziert für {{ LIZENZ.lizenznehmer }}{% else %}Testversion{% endif %}</span>
+    <span>{{ PROGRAMM_NAME }} {{ PROGRAMM_VERSION }}{% if LIZENZPFLICHT %} ·
+      {% if LIZENZ %}lizenziert für {{ LIZENZ.lizenznehmer }}{% else %}Testversion{% endif %}{% endif %}</span>
     <span>Datenordner: <span class="mono">{{ DATENORDNER }}</span></span>
   </footer>
   {% block skripte %}{% endblock %}
