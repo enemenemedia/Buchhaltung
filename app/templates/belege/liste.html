@@ -9,14 +9,15 @@
         <input type="file" name="xml" accept=".xml,application/xml,text/xml" onchange="this.form.submit()" hidden>
       </label>
     </form>
+    <a class="knopf" href="{{ url_for('belege.auswertung_seite', jahr=filter.jahr) }}">Auswertung nach Tags</a>
     <a class="knopf" href="{{ url_for('belege.neu', art='einnahme') }}">+ Einnahme</a>
     <a class="knopf knopf-primaer" href="{{ url_for('belege.neu', art='ausgabe') }}">+ Ausgabe</a>
   </div>
 </div>
 
 <div class="kennzahlen kennzahlen-3">
-  <div><strong>{{ kennzahlen.einnahmen|cent }}</strong><span>Einnahmen {{ filter.jahr }} (bezahlt, brutto)</span></div>
-  <div><strong>{{ kennzahlen.ausgaben|cent }}</strong><span>Ausgaben {{ filter.jahr }} (bezahlt, brutto)</span></div>
+  <div><strong>{{ kennzahlen.einnahmen|cent }}</strong><span>Einnahmen {{ filter.jahr }} (bezahlt, brutto, inkl. Entwürfe)</span></div>
+  <div><strong>{{ kennzahlen.ausgaben|cent }}</strong><span>Ausgaben {{ filter.jahr }} (bezahlt, brutto, inkl. Entwürfe)</span></div>
   <div class="{% if kennzahlen.saldo < 0 %}rot{% endif %}"><strong>{{ kennzahlen.saldo|cent }}</strong><span>Saldo · <a href="{{ url_for('euer.seite', jahr=filter.jahr) }}">zur EÜR</a></span></div>
 </div>
 {% if kennzahlen.entwuerfe or kennzahlen.offen %}
@@ -42,8 +43,14 @@
     {% for wert, text in STATUS.items() %}<option value="{{ wert }}" {% if filter.status == wert %}selected{% endif %}>{{ text }}</option>{% endfor %}
     <option value="offen" {% if filter.status == 'offen' %}selected{% endif %}>Noch nicht bezahlt</option>
   </select>
+  <select name="tag" aria-label="Tag" onchange="this.form.submit()" class="schmal">
+    <option value="">Alle Tags</option>
+    {% for t in alle_tags %}<option value="{{ t.id }}" {% if filter.tag == t.id|string %}selected{% endif %}>{{ t.name }}{% if not t.aktiv %} (ausgeblendet){% endif %}</option>{% endfor %}
+    <option value="ohne" {% if filter.tag == 'ohne' %}selected{% endif %}>(ohne Tag)</option>
+  </select>
   <button class="knopf" type="submit">Suchen</button>
-  <a class="knopf-link" href="{{ url_for('belege.export_csv', jahr=filter.jahr, art=filter.art, status=filter.status, q=filter.suche) }}">CSV-Export</a>
+  <a class="knopf-link" href="{{ url_for('belege.export_csv', jahr=filter.jahr, art=filter.art, status=filter.status, q=filter.suche, tag=filter.tag) }}">CSV-Export</a>
+  <a class="knopf-link" href="{{ url_for('belege.tags_liste') }}">Tags verwalten</a>
 </form>
 
 {% if belege %}
@@ -59,7 +66,8 @@
         {% elif b.quelle == 'storno' %}<div class="beleg-bezug"><span class="beleg-art art-storno">Storno</span></div>{% endif %}</td>
       <td>{{ b.belegdatum|datum }}</td>
       <td class="umbruch-zelle"><strong>{{ b.partner }}</strong>{% if b.datei_pfad %} <span title="{{ b.datei_name }}">📎</span>{% endif %}
-        <div class="gedimmt klein">{{ b.beschreibung }}</div></td>
+        <div class="gedimmt klein">{{ b.beschreibung }}</div>
+        {% if tags_je_beleg[b.id] %}<div class="tag-zeile">{% for t in tags_je_beleg[b.id] %}<span class="tag-chip klein-chip">{{ t }}</span>{% endfor %}</div>{% endif %}</td>
       <td class="klein umbruch-zelle">{{ b.kategorie|kategorie }}</td>
       <td>{{ b.zahlungsdatum|datum if b.zahlungsdatum else '–' }}</td>
       <td class="rechts zahl-fett {{ 'betrag-einnahme' if b.art == 'einnahme' else 'betrag-ausgabe' }}">{{ b.brutto_cent|cent }}</td>
@@ -71,7 +79,7 @@
 </div>
 {% else %}
 <div class="leer">
-  {% if filter.suche or filter.status or filter.art %}Keine Belege zu diesem Filter. <a href="{{ url_for('belege.liste') }}">Filter zurücksetzen</a>
+  {% if filter.suche or filter.status or filter.art or filter.tag %}Keine Belege zu diesem Filter. <a href="{{ url_for('belege.liste') }}">Filter zurücksetzen</a>
   {% else %}<p>Noch keine Belege für {{ filter.jahr or 'diese Auswahl' }}.</p>
     <p class="gedimmt">Abgeschlossene Rechnungen erscheinen hier automatisch als Einnahme. Ausgaben erfassen Sie mit Beleg (PDF, Foto) oder lesen eine XRechnung ein.</p>
     <p><a class="knopf knopf-primaer" href="{{ url_for('belege.neu', art='ausgabe') }}">Erste Ausgabe erfassen</a></p>{% endif %}

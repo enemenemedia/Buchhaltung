@@ -1,4 +1,4 @@
-"""Modul Belegerfassung: Einnahmen und Ausgaben mit Belegdatei, Festschreiben, Storno, Export."""
+"""Modul Belegerfassung: Einnahmen und Ausgaben mit Belegdatei, Tags, Festschreiben, Storno, Auswertung, Export."""
 
 from __future__ import annotations
 
@@ -9,7 +9,8 @@ from flask import (Blueprint, Response, abort, current_app, flash, redirect, ren
 
 from .. import zahlen
 from ..db import get_db
-from . import abgleich, kategorien, service
+from . import abgleich, auswertung, kategorien, service
+from . import tags as tagmod
 
 bp = Blueprint("belege", __name__, url_prefix="/belege")
 
@@ -47,16 +48,34 @@ def _datei_aus_anfrage() -> tuple[bytes, str] | None:
     return f.read(), f.filename
 
 
-def _formular(beleg: dict, fehler=None, beleg_id=None, status=200):
+def _formular(beleg: dict, fehler=None, beleg_id=None, status=200, gewaehlt=None, neue_tags=""):
+    con = get_db()
+    if gewaehlt is None:
+        gewaehlt = [t["id"] for t in tagmod.fuer_beleg(con, beleg_id)] if beleg_id else []
+    gewaehlt = {int(t) for t in gewaehlt if str(t).isdigit()}
+    # aktive Tags und solche, die der Beleg schon trägt (auch ausgeblendete)
+    alle = [t for t in tagmod.alle(con) if t["aktiv"] or t["id"] in gewaehlt]
     return render_template("belege/formular.html", beleg=beleg, fehler=fehler or {}, beleg_id=beleg_id,
                            einnahmen=kategorien.EINNAHMEN, ausgaben=kategorien.AUSGABEN,
                            zahlungsarten=service.ZAHLUNGSARTEN, ust_texte=service.UST_TEXT,
-                           ohne_ust=sorted(kategorien.OHNE_UST)), status
+                           ohne_ust=sorted(kategorien.OHNE_UST), alle_tags=alle, gewaehlt=gewaehlt,
+                           neue_tags=neue_tags,
+                           tag_kategorien={t["id"]: t["kategorie"] for t in alle if t["kategorie"]}), status
 
 
 def _filter() -> service.Filter:
-    return service.Filter(jahr=request.args.get("jahr", str(date.today().year)), art=request.args.get("art", ""),
-                          status=request.args.get("status", ""), suche=request.args.get("q", "").strip())
+    jahr = request.args.get("jahr")
+    if jahr is None:
+        jahr = service.standard_jahr(get_db())
+    return service.Filter(jahr=jahr, art=request.args.get("art", ""), status=request.args.get("status", ""),
+                          suche=request.args.get("q", "").strip(), tag=request.args.get("tag", ""))
+
+
+def _tags_speichern(con, beleg_id: int) -> None:
+    try:
+        tagmod.setzen(con, beleg_id, request.form.getlist("tags"), request.form.get("neue_tags", ""))
+    except tagmod.TagFehler as e:
+        raise service.BelegFehler(str(e)) from None
 
 
 @bp.get("/")
@@ -66,7 +85,9 @@ def liste():
     flt = _filter()
     belege = service.liste(con, flt)
     return render_template("belege/liste.html", belege=belege, filter=flt, jahre=service.jahre(con),
-                           kennzahlen=service.kennzahlen(belege, flt.jahr), STATUS=service.STATUS)
+                           kennzahlen=service.kennzahlen(belege, flt.jahr), STATUS=service.STATUS,
+                           tags_je_beleg=tagmod.fuer_belege(con, [b["id"] for b in belege]),
+                           alle_tags=tagmod.alle(con))
 
 
 @bp.route("/neu", methods=["GET", "POST"])
@@ -74,25 +95,33 @@ def neu():
     if request.method == "GET":
         art = request.args.get("art", "ausgabe")
         art = art if art in ("einnahme", "ausgabe") else "ausgabe"
-        return _formular({"art": art, "belegdatum": date.today().isoformat(), "ust_satz": "19",
-                          "kategorie": kategorien.STANDARD[art]})
+        datum = request.args.get("datum", "")
+        try:
+            date.fromisoformat(datum)
+        except ValueError:
+            datum = date.today().isoformat()
+        return _formular({"art": art, "belegdatum": datum, "ust_satz": "19", "kategorie": kategorien.STANDARD[art]})
     con = get_db()
+    gewaehlt, neue = request.form.getlist("tags"), request.form.get("neue_tags", "")
     try:
         werte = service.formular_auswerten(request.form)
-        bid = service.anlegen(con, _daten(), werte, _datei_aus_anfrage(),
-                              festschreiben_sofort=request.form.get("aktion") == "festschreiben")
+        bid = service.anlegen(con, _daten(), werte, _datei_aus_anfrage())
+        _tags_speichern(con, bid)
+        if request.form.get("aktion") == "festschreiben":
+            service.festschreiben(con, bid)
     except service.ValidierungsFehler as e:
-        return _formular(e.werte, e.fehler, status=422)
+        return _formular(e.werte, e.fehler, status=422, gewaehlt=gewaehlt, neue_tags=neue)
     except service.BelegFehler as e:
         con.rollback()
         werte = dict(request.form)
-        return _formular(werte, {"datei": str(e)}, status=422)
+        return _formular(werte, {"datei": str(e)}, status=422, gewaehlt=gewaehlt, neue_tags=neue)
     con.commit()
     _doppelt_warnen(con, bid)
     flash("Beleg gespeichert." if request.form.get("aktion") != "festschreiben"
           else "Beleg gespeichert und festgeschrieben.", "ok")
     if request.form.get("weiter"):
-        return redirect(url_for(".neu", art=werte["art"]))
+        # Nachtragen (z. B. Belege 2024): Art und Datum für den nächsten Beleg übernehmen
+        return redirect(url_for(".neu", art=werte["art"], datum=werte["belegdatum"]))
     return redirect(url_for(".detail", beleg_id=bid))
 
 
@@ -140,9 +169,29 @@ def detail(beleg_id: int):
     if b["rechnung_id"]:
         rechnung = con.execute("SELECT id, nummer, art, dateiname, status FROM rechnungen WHERE id = ?",
                                (b["rechnung_id"],)).fetchone()
+    beleg_tags = tagmod.fuer_beleg(con, beleg_id)
+    ids = {t["id"] for t in beleg_tags}
     return render_template("belege/detail.html", b=b, storno=storno, original=original, rechnung=rechnung,
                            protokoll=service.protokoll_lesen(con, beleg_id), STATUS=service.STATUS,
-                           ust_texte=service.UST_TEXT, zahlungsarten=service.ZAHLUNGSARTEN)
+                           ust_texte=service.UST_TEXT, zahlungsarten=service.ZAHLUNGSARTEN,
+                           beleg_tags=beleg_tags, gewaehlt=ids,
+                           alle_tags=[t for t in tagmod.alle(con) if t["aktiv"] or t["id"] in ids])
+
+
+@bp.post("/<int:beleg_id>/tags")
+def tags_aendern(beleg_id: int):
+    """Tags dürfen auch an festgeschriebenen Belegen geändert werden (protokolliert)."""
+    con = get_db()
+    try:
+        service.laden(con, beleg_id)
+        _tags_speichern(con, beleg_id)
+    except service.BelegFehler as e:
+        con.rollback()
+        flash(str(e), "fehler")
+        return redirect(url_for(".detail", beleg_id=beleg_id))
+    con.commit()
+    flash("Tags gespeichert.", "ok")
+    return redirect(url_for(".detail", beleg_id=beleg_id))
 
 
 @bp.route("/<int:beleg_id>/bearbeiten", methods=["GET", "POST"])
@@ -157,17 +206,20 @@ def bearbeiten(beleg_id: int):
         return redirect(url_for(".detail", beleg_id=beleg_id))
     if request.method == "GET":
         return _formular(service.fuer_formular(b), beleg_id=beleg_id)
+    gewaehlt, neue = request.form.getlist("tags"), request.form.get("neue_tags", "")
     try:
         werte = service.formular_auswerten(request.form)
         service.aendern(con, _daten(), beleg_id, werte, _datei_aus_anfrage())
+        _tags_speichern(con, beleg_id)
         if request.form.get("aktion") == "festschreiben":
             service.festschreiben(con, beleg_id)
     except service.ValidierungsFehler as e:
-        return _formular({**e.werte, "datei_name": b["datei_name"]}, e.fehler, beleg_id=beleg_id, status=422)
+        return _formular({**e.werte, "datei_name": b["datei_name"]}, e.fehler, beleg_id=beleg_id, status=422,
+                         gewaehlt=gewaehlt, neue_tags=neue)
     except service.BelegFehler as e:
         con.rollback()
         return _formular({**dict(request.form), "datei_name": b["datei_name"]}, {"datei": str(e)},
-                         beleg_id=beleg_id, status=422)
+                         beleg_id=beleg_id, status=422, gewaehlt=gewaehlt, neue_tags=neue)
     con.commit()
     flash("Beleg gespeichert.", "ok")
     return redirect(url_for(".detail", beleg_id=beleg_id))
@@ -229,6 +281,71 @@ def datei(beleg_id: int):
 @bp.get("/export.csv")
 def export_csv():
     flt = _filter()
-    text = service.csv_export(service.liste(get_db(), flt))
+    con = get_db()
+    belege = service.liste(con, flt)
+    text = service.csv_export(belege, tagmod.fuer_belege(con, [b["id"] for b in belege]))
     return Response(text, content_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": f"attachment; filename=belege_{flt.jahr or 'alle'}.csv"})
+
+
+# --------------------------------------------------------------------------- Tags verwalten
+
+@bp.get("/tags/")
+def tags_liste():
+    return render_template("belege/tags.html", alle_tags=tagmod.alle(get_db()), kategorien=kategorien.ALLE,
+                           einnahmen=kategorien.EINNAHMEN, ausgaben=kategorien.AUSGABEN)
+
+
+@bp.post("/tags/neu")
+def tag_neu():
+    con = get_db()
+    try:
+        tagmod.anlegen(con, request.form.get("name", ""), request.form.get("kategorie") or None)
+    except tagmod.TagFehler as e:
+        flash(str(e), "fehler")
+        return redirect(url_for(".tags_liste"))
+    con.commit()
+    flash("Tag angelegt.", "ok")
+    return redirect(url_for(".tags_liste"))
+
+
+@bp.post("/tags/<int:tag_id>")
+def tag_aendern(tag_id: int):
+    con = get_db()
+    try:
+        tagmod.aendern(con, tag_id, request.form.get("name", ""), request.form.get("kategorie") or None,
+                       request.form.get("aktiv") == "1")
+    except tagmod.TagFehler as e:
+        flash(str(e), "fehler")
+        return redirect(url_for(".tags_liste"))
+    con.commit()
+    flash("Tag gespeichert.", "ok")
+    return redirect(url_for(".tags_liste"))
+
+
+# --------------------------------------------------------------------------- Auswertung nach Tags
+
+def _auswertung() -> auswertung.Auswertung:
+    con = get_db()
+    try:
+        jahr = int(request.args.get("jahr") or service.standard_jahr(con))
+    except ValueError:
+        jahr = int(service.standard_jahr(con))
+    return auswertung.berechnen(con, jahr, art=request.args.get("art", "ausgabe"),
+                                datum=request.args.get("datum", "beleg"),
+                                nur_festgeschrieben=request.args.get("nur_fest") == "1")
+
+
+@bp.get("/auswertung")
+def auswertung_seite():
+    rechnungen_abgleichen()
+    return render_template("belege/auswertung.html", a=_auswertung(), jahre=service.jahre(get_db()),
+                           ARTEN=auswertung.ARTEN, DATUMSARTEN=auswertung.DATUMSARTEN, OHNE_TAG=auswertung.OHNE_TAG)
+
+
+@bp.get("/auswertung.csv")
+def auswertung_csv():
+    a = _auswertung()
+    name = f"belege_nach_tags_{a.art}_{a.jahr}.csv"
+    return Response(auswertung.csv_export(a), content_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f"attachment; filename={name}"})

@@ -26,6 +26,7 @@ from .xrechnung_import import XRechnungFehler, ist_eigene_rechnung, lese_xrechnu
 
 BEREICH = "beleg"
 ABLAGE = "belege"
+ERSTES_JAHR = 2024                 # Jahresauswahl beginnt mit 2024
 ERLAUBTE_ENDUNGEN = {".pdf", ".jpg", ".jpeg", ".png", ".xml"}
 DATEI_MAX = 20 * 1024 * 1024
 ZAHLUNGSARTEN = ["Überweisung", "Lastschrift", "Bar", "EC-/Kreditkarte", "PayPal", "Verrechnung"]
@@ -210,6 +211,7 @@ class Filter:
     art: str = ""
     status: str = ""
     suche: str = ""
+    tag: str = ""                  # Tag-ID; "ohne" = Belege ohne Tag
 
 
 def liste(con, flt: Filter) -> list:
@@ -228,14 +230,19 @@ def liste(con, flt: Filter) -> list:
     if flt.suche:
         sql += (" AND (partner LIKE ? OR beschreibung LIKE ? OR rechnungsnummer LIKE ? OR belegnummer LIKE ?)")
         p += [f"%{flt.suche}%"] * 4
+    if flt.tag == "ohne":
+        sql += " AND NOT EXISTS (SELECT 1 FROM beleg_tags bt WHERE bt.beleg_id = belege.id)"
+    elif flt.tag.isdigit():
+        sql += " AND EXISTS (SELECT 1 FROM beleg_tags bt WHERE bt.beleg_id = belege.id AND bt.tag_id = ?)"
+        p.append(int(flt.tag))
     sql += " ORDER BY belegdatum DESC, id DESC"
     return con.execute(sql, p).fetchall()
 
 
 def kennzahlen(belege: list, jahr: str) -> dict:
-    """Zahlungen im gewählten Jahr (nur gebuchte Belege)."""
+    """Zahlungen im gewählten Jahr – auch Entwürfe (Auswertung ohne Festschreibung möglich)."""
     def im_jahr(b):
-        return b["status"] != "entwurf" and b["zahlungsdatum"] and (not jahr or b["zahlungsdatum"][:4] == jahr)
+        return bool(b["zahlungsdatum"]) and (not jahr or b["zahlungsdatum"][:4] == jahr)
     ein = sum(b["brutto_cent"] for b in belege if b["art"] == "einnahme" and im_jahr(b))
     aus = sum(b["brutto_cent"] for b in belege if b["art"] == "ausgabe" and im_jahr(b))
     return {"einnahmen": ein, "ausgaben": aus, "saldo": ein - aus,
@@ -245,10 +252,17 @@ def kennzahlen(belege: list, jahr: str) -> dict:
 
 
 def jahre(con) -> list[str]:
+    """Alle Jahre ab 2024 bis heute, dazu ältere/spätere Jahre, in denen es Belege gibt."""
     js = {r[0] for r in con.execute("SELECT DISTINCT substr(belegdatum, 1, 4) FROM belege")}
     js |= {r[0] for r in con.execute("SELECT DISTINCT substr(zahlungsdatum, 1, 4) FROM belege WHERE zahlungsdatum IS NOT NULL")}
-    js.add(str(date.today().year))
+    js |= {str(j) for j in range(ERSTES_JAHR, max(date.today().year, ERSTES_JAHR) + 1)}
     return sorted(js, reverse=True)
+
+
+def standard_jahr(con) -> str:
+    """Vorauswahl: das neueste Jahr mit Belegen, sonst 2024 (Beginn der Buchhaltung)."""
+    z = con.execute("SELECT MAX(substr(belegdatum, 1, 4)) FROM belege").fetchone()[0]
+    return z or str(ERSTES_JAHR)
 
 
 # --------------------------------------------------------------------------- Schreiben
@@ -347,6 +361,8 @@ def stornieren(con, beleg_id: int, grund: str, *, rechnung_id: int | None = None
                  brutto_cent=-b["brutto_cent"], notiz=grund[:500],
                  beschreibung=f"Storno zu {b['belegnummer']}: {b['beschreibung']}"[:300])
     sid = _einfuegen(con, werte, quelle="storno", storno_von=b["id"], rechnung_id=rechnung_id)
+    from .tags import kopieren
+    kopieren(con, b["id"], sid)          # die Gegenbuchung trägt dieselben Tags
     protokoll.schreiben(con, BEREICH, sid, "angelegt", {"hinweise": [f"Storno zu {b['belegnummer']}: {grund}"]})
     festschreiben(con, sid)
     con.execute("UPDATE belege SET status = 'storniert' WHERE id = ?", (b["id"],))
@@ -396,15 +412,17 @@ def xrechnung_importieren(con, daten: Path, inhalt: bytes, dateiname: str) -> tu
 
 # --------------------------------------------------------------------------- Export
 
-def csv_export(belege: list) -> str:
+def csv_export(belege: list, tags_je_beleg: dict[int, list[str]] | None = None) -> str:
+    tags_je_beleg = tags_je_beleg or {}
     puffer = io.StringIO()
     w = csv.writer(puffer, delimiter=";", lineterminator="\r\n")
     w.writerow(["Belegnummer", "Status", "Art", "Belegdatum", "Bezahlt am", "Partner", "Rechnungsnummer",
-                "Beschreibung", "Kategorie", "USt-Satz", "Netto", "USt", "Brutto", "Zahlungsart", "Quelle",
+                "Beschreibung", "Kategorie", "Tags", "USt-Satz", "Netto", "USt", "Brutto", "Zahlungsart", "Quelle",
                 "Datei", "SHA-256"])
     for b in belege:
         w.writerow([b["belegnummer"] or "", STATUS[b["status"]], b["art"], b["belegdatum"], b["zahlungsdatum"] or "",
                     b["partner"], b["rechnungsnummer"] or "", b["beschreibung"], kategorien.bezeichnung(b["kategorie"]),
+                    ", ".join(tags_je_beleg.get(b["id"], [])),
                     b["ust_satz"], als_eingabe(b["netto_cent"]), als_eingabe(b["ust_cent"]),
                     als_eingabe(b["brutto_cent"]), b["zahlungsart"] or "", b["quelle"], b["datei_name"] or "",
                     b["datei_sha256"] or ""])

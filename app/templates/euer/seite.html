@@ -4,11 +4,13 @@
 <div class="seitenkopf">
   <h1>Einnahmen-Überschuss-Rechnung {{ erg.jahr }}</h1>
   <div class="knopfgruppe umbruch-erlaubt nicht-drucken">
-    <form method="get"><select name="jahr" aria-label="Jahr" onchange="this.form.submit()" class="schmal">
+    <form method="get" class="knopfgruppe"><select name="jahr" aria-label="Jahr" onchange="this.form.submit()" class="schmal">
       {% for j in jahre %}<option {% if j == erg.jahr %}selected{% endif %}>{{ j }}</option>{% endfor %}
-    </select></form>
-    <a class="knopf" href="{{ url_for('euer.csv', jahr=erg.jahr) }}">CSV</a>
-    <a class="knopf knopf-primaer" href="{{ url_for('euer.als_pdf', jahr=erg.jahr) }}" target="_blank">PDF</a>
+    </select>
+    <label class="haken-inline klein"><input type="checkbox" name="nur_fest" value="1" onchange="this.form.submit()" {% if erg.nur_festgeschrieben %}checked{% endif %}> nur festgeschriebene Belege</label></form>
+    {% set nf = '1' if erg.nur_festgeschrieben else '' %}
+    <a class="knopf" href="{{ url_for('euer.csv', jahr=erg.jahr, nur_fest=nf) }}">CSV</a>
+    <a class="knopf knopf-primaer" href="{{ url_for('euer.als_pdf', jahr=erg.jahr, nur_fest=nf) }}" target="_blank">PDF</a>
   </div>
 </div>
 

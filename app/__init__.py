@@ -1,6 +1,6 @@
 """Buchhaltung für KMU – Flask-Anwendung (Kunden, Angebote, Rechnungen mit XRechnung, Belegerfassung, EÜR)."""
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 PROGRAMM_NAME = "Buchhaltung für KMU"
 
 import os

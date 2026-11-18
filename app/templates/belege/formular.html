@@ -47,6 +47,18 @@
   </section>
 
   <section class="karte">
+    <h2>Tags <small class="gedimmt klein">– mehrere möglich, jederzeit änderbar · <a href="{{ url_for('belege.tags_liste') }}" target="_blank">Tags verwalten</a></small></h2>
+    <div class="tag-auswahl" id="tag-auswahl">
+      {% for t in alle_tags %}
+      <label class="tag-chip {% if t.id in gewaehlt %}gewaehlt{% endif %}" {% if t.kategorie %}data-kategorie="{{ t.kategorie }}"{% endif %}>
+        <input type="checkbox" name="tags" value="{{ t.id }}" {% if t.id in gewaehlt %}checked{% endif %}> {{ t.name }}</label>
+      {% endfor %}
+    </div>
+    <label class="feld abstand-oben"><span>Neuer Tag</span>
+      <input name="neue_tags" value="{{ neue_tags }}" placeholder="z. B. Messe – mehrere mit Komma trennen" maxlength="200"></label>
+  </section>
+
+  <section class="karte">
     <h2>Beträge</h2>
     <div class="raster">
       <label class="feld s3 {% if fehler.get('ust_satz') %}hat-fehler{% endif %}"><span>USt-Satz</span>
@@ -135,6 +147,19 @@
   document.querySelectorAll('input[name=art]').forEach(r => r.addEventListener('change', artWechsel));
   kat.addEventListener('change', kategorieWechsel);
   artWechsel();
+
+  // Tags: Auswahl hervorheben; der erste gewählte Tag schlägt seine EÜR-Kategorie vor,
+  // solange die Kategorie noch nicht von Hand gewählt wurde
+  let kategorieVonHand = {{ 'true' if beleg_id else 'false' }};
+  kat.addEventListener('change', () => { kategorieVonHand = true; });
+  document.querySelectorAll('.tag-chip input').forEach(cb => cb.addEventListener('change', () => {
+    cb.parentElement.classList.toggle('gewaehlt', cb.checked);
+    const k = cb.parentElement.dataset.kategorie;
+    if (cb.checked && k && !kategorieVonHand) {
+      const opt = kat.querySelector(`option[value="${k}"]`);
+      if (opt && !opt.parentElement.disabled) { kat.value = k; kategorieWechsel(); }
+    }
+  }));
 
   const ablage = document.getElementById('ablage'), feld = ablage.querySelector('input');
   ['dragenter', 'dragover'].forEach(e => ablage.addEventListener(e, ev => { ev.preventDefault(); ablage.classList.add('aktiv'); }));

@@ -52,7 +52,9 @@ def erzeugen(erg: Ergebnis, firma: str) -> bytes:
     breite = A4[0] - 36 * mm
     teile = [Paragraph(f"Einnahmen-Überschuss-Rechnung {erg.jahr}", S_TITEL),
              Paragraph(escape(firma or "") + (" · Kleinunternehmer (§ 19 UStG)" if erg.kleinunternehmer else "")
-                       + f" · Wirtschaftsjahr 01.01.–31.12.{erg.jahr}", S_UNTER), Spacer(1, 6)]
+                       + f" · Wirtschaftsjahr 01.01.–31.12.{erg.jahr}"
+                       + (" · nur festgeschriebene Belege" if erg.nur_festgeschrieben
+                          else " · einschließlich nicht festgeschriebener Belege (Entwürfe)"), S_UNTER), Spacer(1, 6)]
 
     zeilen = [["Betriebseinnahmen", "Betrag"]]
     zeilen += [[Paragraph(escape(z.text), S_TEXT), _e(z.cent)] for z in erg.einnahmen] or [["(keine)", _e(0)]]

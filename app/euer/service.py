@@ -9,7 +9,8 @@ Grundsätze
     Finanzamt gezahlte USt sind Betriebsausgaben.
   - Kleinunternehmer (§ 19 UStG, laut Stammdaten): keine Vorsteuer – Ausgaben zählen brutto.
   - Bewirtung: 70 % der Kosten abziehbar (§ 4 Abs. 5 Nr. 2 EStG); Vorsteuer voll.
-  - Entwürfe zählen nicht. Stornierte Belege und ihre Gegenbuchungen heben sich auf.
+  - Auch ohne Festschreibung: Entwürfe zählen standardmäßig mit (abschaltbar über
+    nur_festgeschrieben). Stornierte Belege und ihre Gegenbuchungen heben sich auf.
 
 Die Zuordnung zu den Zeilen der Anlage EÜR des jeweiligen Jahres bitte mit der
 Steuerberatung abstimmen.
@@ -52,6 +53,7 @@ class Anlage:
 class Ergebnis:
     jahr: int
     kleinunternehmer: bool
+    nur_festgeschrieben: bool = False
     einnahmen: list[Zeile] = field(default_factory=list)
     ausgaben: list[Zeile] = field(default_factory=list)
     anlagen: list[Anlage] = field(default_factory=list)
@@ -94,19 +96,22 @@ def afa_plan(ak_cent: int, nutzungsdauer: int, anschaffung: str) -> dict[int, in
 
 
 def jahre(con) -> list[int]:
+    """Alle Jahre ab 2024 bis heute, dazu weitere Jahre mit Belegen."""
+    from ..belege.service import ERSTES_JAHR
     js = {int(r[0]) for r in con.execute(
-        "SELECT DISTINCT substr(zahlungsdatum, 1, 4) FROM belege WHERE zahlungsdatum IS NOT NULL AND status <> 'entwurf'")}
-    js |= {int(r[0]) for r in con.execute("SELECT DISTINCT substr(belegdatum, 1, 4) FROM belege WHERE status <> 'entwurf'")}
-    js.add(date.today().year)
+        "SELECT DISTINCT substr(zahlungsdatum, 1, 4) FROM belege WHERE zahlungsdatum IS NOT NULL")}
+    js |= {int(r[0]) for r in con.execute("SELECT DISTINCT substr(belegdatum, 1, 4) FROM belege")}
+    js |= set(range(ERSTES_JAHR, max(date.today().year, ERSTES_JAHR) + 1))
     return sorted(js, reverse=True)
 
 
-def berechnen(con, jahr: int) -> Ergebnis:
+def berechnen(con, jahr: int, *, nur_festgeschrieben: bool = False) -> Ergebnis:
     s = con.execute("SELECT kleinunternehmer FROM stammdaten LIMIT 1").fetchone()
     ku = bool(s and s["kleinunternehmer"])
-    erg = Ergebnis(jahr=jahr, kleinunternehmer=ku)
+    erg = Ergebnis(jahr=jahr, kleinunternehmer=ku, nur_festgeschrieben=nur_festgeschrieben)
     j = str(jahr)
-    gebucht = con.execute("SELECT * FROM belege WHERE status IN ('festgeschrieben', 'storniert')").fetchall()
+    status = "('festgeschrieben', 'storniert')" if nur_festgeschrieben else "('festgeschrieben', 'storniert', 'entwurf')"
+    gebucht = con.execute(f"SELECT * FROM belege WHERE status IN {status}").fetchall()
 
     def aufwand(b) -> int:
         """Als Betriebsausgabe anzusetzender Betrag eines Ausgabenbelegs (netto bzw. brutto bei KU)."""
@@ -146,7 +151,7 @@ def berechnen(con, jahr: int) -> Ergebnis:
                 if k not in kategorien.NACH_ANSCHAFFUNG:
                     aus_kat[k] = aus_kat.get(k, 0) + aufwand(b)
         # Anschaffung (GWG, Anlagevermögen): stornierte Paare bleiben außen vor
-        if k in kategorien.NACH_ANSCHAFFUNG and b["status"] == "festgeschrieben" and b["quelle"] != "storno":
+        if k in kategorien.NACH_ANSCHAFFUNG and b["status"] in ("festgeschrieben", "entwurf") and b["quelle"] != "storno":
             if k == "gwg":
                 if b["belegdatum"][:4] == j:
                     gwg += aufwand(b)
@@ -156,7 +161,7 @@ def berechnen(con, jahr: int) -> Ergebnis:
                 bisher = sum(v for jj, v in plan.items() if jj < jahr)
                 if bisher < aufwand(b) and int(b["belegdatum"][:4]) <= jahr:
                     afa += im_jahr
-                    erg.anlagen.append(Anlage(b["id"], b["belegnummer"], b["beschreibung"], b["belegdatum"],
+                    erg.anlagen.append(Anlage(b["id"], b["belegnummer"] or f"Entwurf #{b['id']}", b["beschreibung"], b["belegdatum"],
                                               aufwand(b), b["nutzungsdauer"], bisher, im_jahr,
                                               aufwand(b) - bisher - im_jahr))
 
@@ -194,14 +199,16 @@ def berechnen(con, jahr: int) -> Ergebnis:
     # --- Hinweise auf Belege, die (noch) nicht enthalten sind
     entwuerfe = con.execute("SELECT COUNT(*) FROM belege WHERE status = 'entwurf' AND "
                             "(substr(belegdatum, 1, 4) = ? OR substr(zahlungsdatum, 1, 4) = ?)", (j, j)).fetchone()[0]
-    if entwuerfe:
+    if entwuerfe and nur_festgeschrieben:
         erg.hinweise.append(f"{entwuerfe} Beleg(e) des Jahres sind noch Entwürfe und daher nicht enthalten.")
-    offen = con.execute("SELECT COUNT(*) FROM belege WHERE status = 'festgeschrieben' AND quelle <> 'storno' "
+    elif entwuerfe:
+        erg.hinweise.append(f"{entwuerfe} Beleg(e) des Jahres sind noch nicht festgeschrieben (Entwurf), aber enthalten.")
+    offen = con.execute("SELECT COUNT(*) FROM belege WHERE status " + ("= 'festgeschrieben'" if nur_festgeschrieben else "IN ('festgeschrieben', 'entwurf')") + " AND quelle <> 'storno' "
                         "AND zahlungsdatum IS NULL AND belegdatum <= ? AND kategorie NOT IN ('gwg', 'anlagevermoegen')",
                         (f"{j}-12-31",)).fetchone()[0]
     if offen:
         erg.hinweise.append(f"{offen} festgeschriebene(r) Beleg(e) ohne Zahlungsdatum – erst mit der Zahlung enthalten.")
-    ohne_nd = con.execute("SELECT COUNT(*) FROM belege WHERE status = 'festgeschrieben' AND kategorie = 'anlagevermoegen' "
+    ohne_nd = con.execute("SELECT COUNT(*) FROM belege WHERE status IN ('festgeschrieben', 'entwurf') AND kategorie = 'anlagevermoegen' "
                           "AND (nutzungsdauer IS NULL OR nutzungsdauer < 1)").fetchone()[0]
     if ohne_nd:
         erg.hinweise.append(f"{ohne_nd} Anlagegut/-güter ohne Nutzungsdauer – keine AfA berechnet.")
@@ -222,7 +229,8 @@ def csv_export(erg: Ergebnis) -> str:
     def betrag(c: int) -> str:
         return _euro(c).replace(" €", "").replace(".", "")
 
-    w.writerow([f"Einnahmen-Überschuss-Rechnung {erg.jahr}"])
+    w.writerow([f"Einnahmen-Überschuss-Rechnung {erg.jahr}"
+                + (" (nur festgeschriebene Belege)" if erg.nur_festgeschrieben else " (einschließlich Entwürfe)")])
     w.writerow([])
     w.writerow(["Bereich", "Position", "Betrag", "Hinweis"])
     for z in erg.einnahmen:

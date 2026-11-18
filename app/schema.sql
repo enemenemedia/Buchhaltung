@@ -513,3 +513,39 @@ WHEN OLD.status <> 'entwurf'
 BEGIN
     SELECT RAISE(ABORT, 'Festgeschriebene Belege dürfen nicht gelöscht werden (GoBD).');
 END;
+
+-- ===========================================================================
+-- Buchhaltung: Tags für Belege (frei erweiterbar, mehrere je Beleg)
+-- Tags sind eine Ordnungshilfe neben der EÜR-Kategorie. Sie gehören nicht zum
+-- festgeschriebenen Belegsinhalt und dürfen jederzeit geändert werden (protokolliert).
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS tags (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT    NOT NULL UNIQUE COLLATE NOCASE CHECK (length(trim(name)) BETWEEN 1 AND 60),
+    kategorie       TEXT,                        -- Vorschlag für die EÜR-Kategorie (optional)
+    aktiv           INTEGER NOT NULL DEFAULT 1,  -- 0 = ausgeblendet (bleibt an alten Belegen)
+    reihenfolge     INTEGER NOT NULL DEFAULT 100,
+    angelegt_am     TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS beleg_tags (
+    beleg_id        INTEGER NOT NULL REFERENCES belege (id) ON DELETE CASCADE,
+    tag_id          INTEGER NOT NULL REFERENCES tags (id),
+    PRIMARY KEY (beleg_id, tag_id)
+);
+CREATE INDEX IF NOT EXISTS idx_beleg_tags_tag ON beleg_tags (tag_id);
+
+-- Standard-Tags – nur beim ersten Start (leere Tabelle), damit umbenannte oder
+-- ausgeblendete Tags nicht wieder auftauchen
+INSERT INTO tags (name, kategorie, reihenfolge)
+SELECT name, kategorie, reihenfolge FROM (
+              SELECT 'Fahrtkosten' AS name, 'reisekosten' AS kategorie, 10 AS reihenfolge
+    UNION ALL SELECT 'Fremdleistung', 'fremdleistungen', 20
+    UNION ALL SELECT 'Büromaterial', 'buero', 30
+    UNION ALL SELECT 'Internet/Kommunikation', 'telekommunikation', 40
+    UNION ALL SELECT 'Abo', NULL, 50
+    UNION ALL SELECT 'Software', 'software', 60
+    UNION ALL SELECT 'Waren', 'waren', 70
+    UNION ALL SELECT 'Reparaturen', 'sonstige_ausgaben', 80
+    UNION ALL SELECT 'sonstige Betriebskosten', 'sonstige_ausgaben', 90
+) WHERE NOT EXISTS (SELECT 1 FROM tags);

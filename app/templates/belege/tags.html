@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block titel %}Tags – {{ PROGRAMM_NAME }}{% endblock %}
+
+{% macro kategorie_auswahl(gewaehlt) -%}
+  <select name="kategorie" aria-label="Kategorie-Vorschlag">
+    <option value="">– kein Vorschlag –</option>
+    <optgroup label="Ausgaben">{% for k, v in ausgaben.items() %}<option value="{{ k }}" {% if k == gewaehlt %}selected{% endif %}>{{ v }}</option>{% endfor %}</optgroup>
+    <optgroup label="Einnahmen">{% for k, v in einnahmen.items() %}<option value="{{ k }}" {% if k == gewaehlt %}selected{% endif %}>{{ v }}</option>{% endfor %}</optgroup>
+  </select>
+{%- endmacro %}
+
+{% block inhalt %}
+<nav class="brotkrumen"><a href="{{ url_for('belege.liste') }}">Belege</a> › Tags</nav>
+<div class="seitenkopf">
+  <div>
+    <h1>Tags</h1>
+    <p class="untertitel">Schlagworte für Belege – mehrere je Beleg, frei erweiterbar. Ausgeblendete Tags bleiben an
+      vorhandenen Belegen erhalten, werden aber nicht mehr zur Auswahl angeboten.</p>
+  </div>
+  <a class="knopf" href="{{ url_for('belege.auswertung_seite') }}">Auswertung nach Tags</a>
+</div>
+
+<section class="karte">
+  <h2>Neuer Tag</h2>
+  <form method="post" action="{{ url_for('belege.tag_neu') }}" class="zeilenformular">
+    <label class="feld"><span>Name <em>*</em></span><input name="name" required maxlength="60" placeholder="z. B. Messe"></label>
+    <label class="feld"><span>Kategorie-Vorschlag</span>{{ kategorie_auswahl(None) }}</label>
+    <button class="knopf knopf-primaer">Anlegen</button>
+  </form>
+  <p class="gedimmt klein">Der Kategorie-Vorschlag wird beim Erfassen übernommen, wenn der Tag als erster gewählt wird.</p>
+</section>
+
+<section class="karte">
+  <h2>Vorhandene Tags</h2>
+  <div class="tabelle-rahmen">
+  <table class="tabelle">
+    <thead><tr><th colspan="5"><div class="tag-zeilenform"><span>Name</span><span>Kategorie-Vorschlag</span>
+      <span class="rechts">Belege</span><span>Auswahl</span><span></span></div></th></tr></thead>
+    <tbody>
+    {% for t in alle_tags %}
+      <tr class="{% if not t.aktiv %}gedimmt{% endif %}">
+        <td colspan="5">
+          <form method="post" action="{{ url_for('belege.tag_aendern', tag_id=t.id) }}" class="tag-zeilenform">
+            <input name="name" value="{{ t.name }}" required maxlength="60" aria-label="Name">
+            {{ kategorie_auswahl(t.kategorie) }}
+            <a class="rechts mono" href="{{ url_for('belege.liste', tag=t.id, jahr='') }}" title="Belege mit diesem Tag">{{ t.anzahl }}</a>
+            <label class="haken-inline klein"><input type="checkbox" name="aktiv" value="1" {% if t.aktiv %}checked{% endif %}> angezeigt</label>
+            <button class="knopf">Speichern</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}

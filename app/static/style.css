@@ -424,3 +424,20 @@ iframe.beleg-vorschau { height: 560px; }
   .kopf, .testlizenz-band, .fuss, .nicht-drucken, .hinweisbox a { display: none !important; }
   .karte { break-inside: avoid; box-shadow: none; }
 }
+
+/* --- Tags ------------------------------------------------------------------- */
+.tag-auswahl { display: flex; flex-wrap: wrap; gap: 8px; }
+.tag-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid var(--linie);
+  border-radius: 999px; background: #fff; cursor: pointer; font-size: .92rem; user-select: none; }
+.tag-chip input { width: auto; margin: 0; }
+.tag-chip.gewaehlt { background: var(--akzent-hell, #e3f0ec); border-color: var(--akzent); color: var(--akzent); font-weight: 600; }
+.tag-chip:hover { border-color: var(--akzent); }
+.tag-zeile { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.tag-chip.klein-chip { padding: 1px 8px; font-size: .75rem; cursor: default; background: var(--akzent-hell, #e3f0ec);
+  border-color: transparent; color: var(--akzent); }
+.tag-zeilenform { display: grid; grid-template-columns: minmax(140px, 1.2fr) minmax(160px, 1.5fr) 60px auto auto; gap: 10px;
+  align-items: center; }
+.tag-zeilenform input[name=name], .tag-zeilenform select { width: 100%; }
+th .tag-zeilenform { text-align: left; }
+th .tag-zeilenform .rechts { text-align: right; }
+@media (max-width: 760px) { .tag-zeilenform { grid-template-columns: 1fr 1fr; } }

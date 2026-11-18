@@ -68,7 +68,13 @@ def test_euer_alle_regeln(con, verz):
     service.stornieren(con, sid, "doppelt")
     con.commit()
 
-    erg = euer.berechnen(con, J)
+    # Standard: auch ohne Festschreibung – der Entwurf über 999 € (Büro) ist enthalten
+    alle = euer.berechnen(con, J)
+    assert zeilen(alle.ausgaben)["buero"] == 10000 + 99900
+    assert zeilen(alle.ausgaben)["vorsteuer"] == 81700 + 18981
+    assert any("noch nicht festgeschrieben (Entwurf), aber enthalten" in h for h in alle.hinweise)
+
+    erg = euer.berechnen(con, J, nur_festgeschrieben=True)
     assert zeilen(erg.einnahmen) == {"umsatz_steuerpflichtig": 100000, "ust_vereinnahmt": 19000, "ust_erstattung": 5000}
     assert zeilen(erg.ausgaben) == {"buero": 10000, "bewirtung": 7000, "afa": 90000, "gwg": 50000,
                                     "vorsteuer": 1900 + 1900 + 9500 + 68400, "ust_zahlung": 30000}
@@ -81,7 +87,7 @@ def test_euer_alle_regeln(con, verz):
     assert sum(m["ust"] for m in erg.monate) == 19000
 
     # Folgejahr: nur AfA, keine Zahlungen
-    erg2 = euer.berechnen(con, J + 1)
+    erg2 = euer.berechnen(con, J + 1, nur_festgeschrieben=True)
     assert zeilen(erg2.ausgaben) == {"afa": 120000}
     assert erg2.anlagen[0].afa_bisher == 90000 and erg2.anlagen[0].restwert == 150000
 

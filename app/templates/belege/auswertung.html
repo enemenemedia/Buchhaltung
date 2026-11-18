@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block titel %}Auswertung nach Tags {{ a.jahr }} – {{ PROGRAMM_NAME }}{% endblock %}
+{% block inhalt %}
+<nav class="brotkrumen"><a href="{{ url_for('belege.liste', jahr=a.jahr) }}">Belege</a> › Auswertung nach Tags</nav>
+<div class="seitenkopf">
+  <div>
+    <h1>{{ ARTEN[a.art] }} nach Tags {{ a.jahr }}</h1>
+    <p class="untertitel">{{ a.beschreibung }}</p>
+  </div>
+  <div class="knopfgruppe umbruch-erlaubt nicht-drucken">
+    <a class="knopf knopf-primaer" href="{{ url_for('belege.auswertung_csv', jahr=a.jahr, art=a.art, datum=a.datum, nur_fest='1' if a.nur_festgeschrieben else '') }}">CSV-Export</a>
+    <a class="knopf" href="{{ url_for('belege.tags_liste') }}">Tags verwalten</a>
+  </div>
+</div>
+
+<form class="filterleiste nicht-drucken" method="get">
+  <select name="jahr" aria-label="Jahr" onchange="this.form.submit()" class="schmal">
+    {% for j in jahre %}<option {% if j == a.jahr|string %}selected{% endif %}>{{ j }}</option>{% endfor %}
+  </select>
+  <select name="art" aria-label="Art" onchange="this.form.submit()" class="schmal">
+    {% for k, v in ARTEN.items() %}<option value="{{ k }}" {% if k == a.art %}selected{% endif %}>{{ v }}</option>{% endfor %}
+  </select>
+  <select name="datum" aria-label="Datum" onchange="this.form.submit()" class="schmal">
+    {% for k, v in DATUMSARTEN.items() %}<option value="{{ k }}" {% if k == a.datum %}selected{% endif %}>nach {{ v }}</option>{% endfor %}
+  </select>
+  <label class="haken-inline klein"><input type="checkbox" name="nur_fest" value="1" onchange="this.form.submit()" {% if a.nur_festgeschrieben %}checked{% endif %}> nur festgeschriebene Belege</label>
+</form>
+
+<div class="kennzahlen kennzahlen-3">
+  <div><strong>{{ a.gesamt.anzahl }}</strong><span>Belege{% if a.entwuerfe %} (davon {{ a.entwuerfe }} Entwurf/Entwürfe){% endif %}</span></div>
+  <div><strong>{{ a.gesamt.netto|cent }}</strong><span>Netto gesamt</span></div>
+  <div><strong>{{ a.gesamt.brutto|cent }}</strong><span>Brutto gesamt</span></div>
+</div>
+
+<section class="karte">
+  <div class="tabelle-rahmen">
+  <table class="tabelle euer-tabelle">
+    <thead><tr><th>Tag</th><th class="rechts">Belege</th><th class="rechts">Netto</th><th class="rechts">USt</th><th class="rechts">Brutto</th><th class="rechts">Anteil</th></tr></thead>
+    <tbody>
+    {% for g in a.gruppen %}
+      <tr class="{% if not g.anzahl %}gedimmt{% endif %}">
+        <td>{% if g.tag == OHNE_TAG %}<em>{{ g.tag }}</em>{% else %}{{ g.tag }}{% endif %}</td>
+        <td class="rechts">{{ g.anzahl }}</td>
+        <td class="rechts">{{ g.netto|cent }}</td><td class="rechts">{{ g.ust|cent }}</td>
+        <td class="rechts zahl-fett">{{ g.brutto|cent }}</td>
+        <td class="rechts klein">{% if a.gesamt.brutto %}{{ ('%.1f'|format(g.brutto * 100 / a.gesamt.brutto)).replace('.', ',') }} %{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr><th>Gesamt (jeder Beleg einmal)</th><th class="rechts">{{ a.gesamt.anzahl }}</th>
+      <th class="rechts">{{ a.gesamt.netto|cent }}</th><th class="rechts">{{ a.gesamt.ust|cent }}</th>
+      <th class="rechts">{{ a.gesamt.brutto|cent }}</th><th></th></tr></tfoot>
+  </table>
+  </div>
+  {% if a.mehrfach %}<p class="gedimmt klein">{{ a.mehrfach }} Beleg(e) haben mehrere Tags und sind in jeder ihrer Tag-Summen enthalten – die Summe der Zeilen kann deshalb über der Gesamtsumme liegen.</p>{% endif %}
+  <p class="gedimmt klein">Stornierte Belege und ihre Gegenbuchungen sind nicht enthalten. Für die steuerliche Auswertung siehe <a href="{{ url_for('euer.seite', jahr=a.jahr) }}">EÜR</a>.</p>
+</section>
+
+{% for g in a.gruppen if g.anzahl %}
+<details class="karte ausklapp">
+  <summary><strong>{{ g.tag }}</strong> · {{ g.anzahl }} Beleg(e) · {{ g.brutto|cent }}</summary>
+  <div class="tabelle-rahmen"><table class="tabelle">
+    <thead><tr><th>Beleg</th><th>Datum</th><th>Partner / Beschreibung</th><th class="rechts">Netto</th><th class="rechts">Brutto</th></tr></thead>
+    <tbody>{% for b in g.belege %}
+      <tr><td class="mono"><a href="{{ url_for('belege.detail', beleg_id=b.id) }}">{{ b.belegnummer or 'Entwurf #' ~ b.id }}</a></td>
+        <td>{{ (b.belegdatum if a.datum == 'beleg' else b.zahlungsdatum)|datum }}</td>
+        <td><strong>{{ b.partner }}</strong> <span class="gedimmt klein">{{ b.beschreibung }}</span></td>
+        <td class="rechts">{{ b.netto_cent|cent }}</td><td class="rechts">{{ b.brutto_cent|cent }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</details>
+{% endfor %}
+{% endblock %}

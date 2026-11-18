@@ -23,11 +23,18 @@ in der Belegerfassung und damit in der EÜR.
 | Verschlüsselung der Datenbank mit Passwort | ✅ fertig |
 | **Belegerfassung** (Einnahmen/Ausgaben, Belegdateien, GoBD-Festschreibung) | ✅ fertig |
 | **Einnahmen-Überschuss-Rechnung** (mit AfA, Anlagenverzeichnis, PDF/CSV) | ✅ fertig |
+| **Tags** für Belege, Auswertung und CSV nach Tags | ✅ fertig (1.1) |
+| Lizenzpflicht | vorerst abgeschaltet (1.1) – XRechnung ohne Lizenznummer |
 
 ## Installation unter Windows
 
-Es gibt zwei Setup-Dateien – Python und alle Komponenten sind jeweils enthalten,
-Administratorrechte sind nicht nötig:
+**Seit Version 1.1 ist die Lizenzpflicht vorerst abgeschaltet** (`app/lizenz.py`: `LIZENZPFLICHT = False`).
+Es gibt dann nur eine Setup-Datei, `Buchhaltung-fuer-KMU-Setup-<Version>.exe`, ohne Lizenzseite; alle
+Funktionen einschließlich XRechnung sind nutzbar. `python3 windows/bauen.py` baut standardmäßig diese
+Variante („frei“).
+
+Mit eingeschalteter Lizenzpflicht (`LIZENZPFLICHT = True`, `windows/bauen.py --variante beide`) gibt es
+zwei Setup-Dateien – Python und alle Komponenten sind jeweils enthalten, Administratorrechte sind nicht nötig:
 
 | | Vollversion | Testversion |
 |---|---|---|
@@ -374,14 +381,29 @@ verschlüsselt, wenn die Datenbank verschlüsselt ist.
   | Korrektur einer **bezahlten** Rechnung | nur die Differenz wird gebucht |
   | Zahlung zurückgesetzt/geändert | Beleg storniert und mit aktuellem Stand neu gebucht |
 
-- **Liste** mit Filter (Jahr, Art, Status, „noch nicht bezahlt“), Suche, Kennzahlen und CSV-Export.
+- **Tags:** Jeder Beleg kann beliebig viele Tags tragen. Vorgegeben sind Fahrtkosten, Fremdleistung,
+  Büromaterial, Internet/Kommunikation, Abo, Software, Waren, Reparaturen und sonstige Betriebskosten.
+  Neue Tags lassen sich direkt beim Erfassen eintippen oder unter **Belege → Tags verwalten** anlegen,
+  umbenennen und ausblenden (nie löschen – sie bleiben an alten Belegen). Ein Tag kann eine EÜR-Kategorie
+  vorschlagen. Tags gehören nicht zum festgeschriebenen Inhalt und sind jederzeit änderbar (protokolliert).
+- **Auswertung nach Tags** (**Belege → Auswertung nach Tags**): je Tag Anzahl, Netto, USt, Brutto und
+  Anteil, dazu „(ohne Tag)“ und die Gesamtsumme (jeder Beleg einmal). Ausgaben oder Einnahmen, Jahr nach
+  Beleg- oder Zahlungsdatum. **CSV-Export** mit allen Belegen gruppiert nach Tag, Zwischensumme je Tag
+  und Übersicht der Summen. Ein Beleg mit mehreren Tags zählt bei jedem seiner Tags.
+- **Auch ohne Festschreibung:** Auswertung nach Tags, Kennzahlen und EÜR berücksichtigen Entwürfe
+  standardmäßig; „nur festgeschriebene Belege“ schaltet sie aus.
+- **Jahre ab 2024:** Die Jahresauswahl beginnt mit 2024; vorgewählt ist das neueste Jahr mit Belegen.
+  „danach nächsten Beleg erfassen“ übernimmt das Belegdatum – praktisch zum Nachtragen.
+- **Liste** mit Filter (Jahr, Art, Status, Tag, „noch nicht bezahlt“), Suche, Kennzahlen und CSV-Export
+  (mit Spalte „Tags“).
 
 ## Einnahmen-Überschuss-Rechnung (EÜR)
 
 Menü **EÜR**, je Kalenderjahr, aus allen festgeschriebenen Belegen:
 
-- **Zufluss-/Abflussprinzip** (§ 11 EStG): es zählt das Zahlungsdatum. Belege ohne Zahlung und
-  Entwürfe sind nicht enthalten – die Seite weist darauf hin.
+- **Zufluss-/Abflussprinzip** (§ 11 EStG): es zählt das Zahlungsdatum. Belege ohne Zahlung sind nicht
+  enthalten – die Seite weist darauf hin. Entwürfe zählen standardmäßig mit (Auswertung ohne
+  Festschreibung); „nur festgeschriebene Belege“ ergibt die endgültige EÜR.
 - **Betriebseinnahmen** je Kategorie, vereinnahmte Umsatzsteuer, Erstattungen des Finanzamts.
 - **Betriebsausgaben** je Kategorie, gezahlte Vorsteuer, an das Finanzamt gezahlte Umsatzsteuer.
 - **Bewirtung** zu 70 % abziehbar (der nicht abziehbare Teil wird ausgewiesen; Vorsteuer voll).

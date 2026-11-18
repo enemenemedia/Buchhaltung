@@ -85,6 +85,24 @@
 </div>
 
 <section class="karte">
+  <h2>Tags</h2>
+  <form method="post" action="{{ url_for('belege.tags_aendern', beleg_id=b.id) }}">
+    <div class="tag-auswahl">
+      {% for t in alle_tags %}
+      <label class="tag-chip {% if t.id in gewaehlt %}gewaehlt{% endif %}">
+        <input type="checkbox" name="tags" value="{{ t.id }}" {% if t.id in gewaehlt %}checked{% endif %}
+               onchange="this.parentElement.classList.toggle('gewaehlt', this.checked)"> {{ t.name }}</label>
+      {% endfor %}
+    </div>
+    <div class="zeilenformular abstand-oben">
+      <label class="feld"><span>Neuer Tag</span><input name="neue_tags" placeholder="mehrere mit Komma trennen" maxlength="200"></label>
+      <button class="knopf">Tags speichern</button>
+    </div>
+    {% if b.status != 'entwurf' %}<p class="gedimmt klein">Tags gehören nicht zum festgeschriebenen Beleginhalt und können jederzeit geändert werden; Änderungen stehen im Protokoll.</p>{% endif %}
+  </form>
+</section>
+
+<section class="karte">
   <h2>Änderungsprotokoll</h2>
   {{ protokoll_liste(protokoll) }}
 </section>
