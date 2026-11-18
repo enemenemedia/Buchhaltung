@@ -87,7 +87,7 @@ def test_anmeldung_sperre_und_abmelden(app, con):
     r = c.post("/anmelden", data={"name": "CHEFIN", "passwort": PW, "weiter": "/belege/"})
     assert r.headers["Location"] == "/belege/"
     html = c.get("/belege/").get_data(as_text=True)
-    assert "Maria" in html and "Abmelden" in html and "Benutzer" in html and "Datenordner" not in html
+    assert "👤 chefin" in html and "Abmelden" in html and "Benutzer" in html and "Datenordner" not in html
     c.post("/abmelden")
     assert c.get("/belege/").status_code == 302
     # fünf Fehlversuche sperren das Konto vorübergehend
