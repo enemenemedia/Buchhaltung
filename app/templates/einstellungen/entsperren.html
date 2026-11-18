@@ -9,7 +9,7 @@
 <body>
   <header class="kopf">
     <div class="kopf-innen">
-      <span class="marke">X-Rechnung <span>für KMU</span></span>
+      <span class="marke">Buchhaltung <span>für KMU</span></span>
       {% if DESKTOP %}
       <div class="kopf-rechts">
         <form method="post" action="{{ url_for('system_beenden') }}" onsubmit="return confirm('{{ PROGRAMM_NAME }} beenden?')">
@@ -32,7 +32,8 @@
         </label>
         <button class="knopf knopf-primaer" type="submit">Entsperren</button>
       </form>
-      <p class="gedimmt klein abstand-oben">Datenordner: <span class="mono">{{ DATENORDNER }}</span></p>
+      {% if not NETZWERK %}<p class="gedimmt klein abstand-oben">Datenordner: <span class="mono">{{ DATENORDNER }}</span></p>{% else %}
+      <p class="gedimmt klein abstand-oben">Nach einem Neustart des Servers muss ein Administrator die Datenbank einmal entsperren.</p>{% endif %}
     </section>
   </main>
 </body>

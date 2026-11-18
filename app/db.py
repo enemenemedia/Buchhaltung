@@ -48,6 +48,8 @@ def _pragma_text(wert: str) -> str:
 def _einrichten(con, row) -> None:
     con.row_factory = row
     con.execute("PRAGMA foreign_keys = ON")
+    # Netzwerkversion: gleichzeitige Zugriffe warten kurz statt mit „database is locked“ abzubrechen
+    con.execute("PRAGMA busy_timeout = 10000")
 
 
 def verbinden(pfad: Path, passwort: str | None = None):
@@ -83,6 +85,9 @@ NACHTRAEGLICHE_SPALTEN = {
         "korrektur_grund": "TEXT NOT NULL DEFAULT ''",
         "vorausbezahlt": "TEXT NOT NULL DEFAULT '0'",
         "xml_ausstehend": "TEXT",
+    },
+    "aenderungsprotokoll": {
+        "benutzer": "TEXT",
     },
 }
 

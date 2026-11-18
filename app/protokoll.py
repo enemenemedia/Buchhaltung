@@ -1,6 +1,6 @@
 """Gemeinsames Änderungsprotokoll für alle Module.
 
-Jeder Eintrag hält Zeitpunkt, Bereich (z. B. 'kunde', 'stammdaten'),
+Jeder Eintrag hält Zeitpunkt, Benutzer (nur Netzwerkversion), Bereich (z. B. 'kunde', 'stammdaten'),
 betroffenes Objekt, Aktion und Details (JSON) fest. Übliche Details:
   {"felder": {"<Bezeichnung>": [alt, neu], ...}}   geänderte Felder
   {"hinweise": ["…", ...]}                         freie Hinweise
@@ -17,12 +17,23 @@ def jetzt() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+def angemeldeter_benutzer() -> str | None:
+    """Name des in der Netzwerkversion angemeldeten Benutzers (sonst None)."""
+    from flask import g, has_request_context
+
+    if not has_request_context():
+        return None
+    b = g.get("benutzer")
+    return b["name"] if b else None
+
+
 def schreiben(con: sqlite3.Connection, bereich: str, objekt_id: int, aktion: str,
               details: dict | None = None) -> None:
     con.execute(
-        "INSERT INTO aenderungsprotokoll (zeitpunkt, bereich, objekt_id, aktion, details) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (jetzt(), bereich, objekt_id, aktion, json.dumps(details or {}, ensure_ascii=False)),
+        "INSERT INTO aenderungsprotokoll (zeitpunkt, bereich, objekt_id, aktion, details, benutzer) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (jetzt(), bereich, objekt_id, aktion, json.dumps(details or {}, ensure_ascii=False),
+         angemeldeter_benutzer()),
     )
 
 

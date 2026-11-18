@@ -1,0 +1,23 @@
+# Buchhaltung für KMU – Netzwerkversion
+# Start:   docker compose up -d        Protokoll / Einrichtungscode:  docker compose logs
+# Danach im Browser:  https://<IP-oder-Name-des-Servers>:8443/
+services:
+  buchhaltung:
+    image: ghcr.io/enemenemedia/buchhaltung:1.2.0
+    # Alternativ aus den Quellen bauen (statt „image:“):
+    # build: { context: .., dockerfile: netzwerk/Dockerfile }
+    container_name: buchhaltung-kmu
+    restart: unless-stopped
+    ports:
+      - "8443:8443"
+    volumes:
+      - ./daten:/daten            # Datenbank, Belege, Rechnungen, Zertifikate – regelmäßig sichern!
+    environment:
+      TZ: Europe/Berlin
+      # Unter diesen Namen/Adressen rufen die Arbeitsplätze den Server auf (für das HTTPS-Zertifikat):
+      BUCHHALTUNG_HOSTNAMEN: "nas,nas.local,192.168.1.10"
+      # Optional: nur diese Netze zulassen (Standard: alle privaten Netze 192.168.x, 10.x, 172.16–31.x)
+      # BUCHHALTUNG_NETZE: "192.168.1.0/24"
+      # Benutzer, dem der Datenordner gehört (Synology meist 1026/100, QNAP 1000/100)
+      PUID: "1000"
+      PGID: "1000"

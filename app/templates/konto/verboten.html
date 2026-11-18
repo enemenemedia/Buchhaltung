@@ -1,0 +1,14 @@
+{% extends "konto/_huelle.html" %}
+{% block titel %}Keine Berechtigung – {{ PROGRAMM_NAME }}{% endblock %}
+{% block inhalt %}
+<h1>Keine Berechtigung</h1>
+{% if BENUTZER %}
+<p>Ihr Konto <strong>{{ BENUTZER.name }}</strong> hat die Rolle <strong>{{ ROLLEN[BENUTZER.rolle] }}</strong> und darf diese
+  Aktion nicht ausführen. Bitte wenden Sie sich an einen Administrator.</p>
+<p class="abstand-oben"><a class="knopf" href="javascript:history.back()">Zurück</a>
+  <a class="knopf" href="{{ url_for('start') }}">Zur Startseite</a></p>
+{% else %}
+<p>Die Anfrage wurde abgewiesen. Die Netzwerkversion ist nur aus dem lokalen Netz erreichbar, und Formulare
+  werden nur aus dem Programm selbst angenommen.</p>
+{% endif %}
+{% endblock %}

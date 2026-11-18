@@ -1,0 +1,9 @@
+# Netzwerkversion (Docker): Laufzeitpakete ohne Testwerkzeuge
+Flask>=3.0
+Pillow>=10.0
+openpyxl>=3.1
+reportlab>=4.0
+cryptography>=42.0
+sqlcipher3-wheels>=0.5
+defusedxml>=0.7
+gunicorn>=22.0

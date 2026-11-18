@@ -8,7 +8,7 @@
 </head>
 <body>
   <header class="kopf">
-    <div class="kopf-innen">
+    <div class="kopf-innen{% if NETZWERK %} mit-konto{% endif %}">
       <a class="marke" href="{{ url_for('start') }}">Buchhaltung <span>für KMU</span></a>
       <nav class="hauptnav">
         <a href="{{ url_for('stammdaten.seite') }}" class="{% if request.blueprint == 'stammdaten' %}aktiv{% endif %}">Stammdaten</a>
@@ -18,10 +18,22 @@
         <a href="{{ url_for('rechnungen.liste') }}" class="{% if request.blueprint == 'rechnungen' %}aktiv{% endif %}">Rechnungen</a>
         <a href="{{ url_for('belege.liste') }}" class="{% if request.blueprint == 'belege' %}aktiv{% endif %}">Belege</a>
         <a href="{{ url_for('euer.seite') }}" class="{% if request.blueprint == 'euer' %}aktiv{% endif %}">EÜR</a>
+        {% if not NETZWERK or IST_ADMIN %}
         <a href="{{ url_for('einstellungen.seite') }}" class="{% if request.blueprint == 'einstellungen' %}aktiv{% endif %}">Einstellungen</a>
+        {% endif %}
+        {% if NETZWERK and IST_ADMIN %}
+        <a href="{{ url_for('konto.benutzer_liste') }}" class="{% if request.blueprint == 'konto' %}aktiv{% endif %}">Benutzer</a>
+        {% endif %}
       </nav>
       <div class="kopf-rechts">
-        {% if VERSCHLUESSELT %}
+        {% if NETZWERK and BENUTZER %}
+        <a class="benutzer-knopf" href="{{ url_for('konto.passwort') }}" title="Angemeldet als {{ BENUTZER.name }} ({{ ROLLEN[BENUTZER.rolle] }}) – Passwort ändern">
+          👤 {{ BENUTZER.name }}</a>
+        <form method="post" action="{{ url_for('konto.abmelden') }}">
+          <button type="submit" class="beenden-knopf">Abmelden</button>
+        </form>
+        {% endif %}
+        {% if VERSCHLUESSELT and (not NETZWERK or IST_ADMIN) %}
         <form method="post" action="{{ url_for('einstellungen.sperren') }}">
           <button type="submit" class="beenden-knopf" title="Datenbank sperren – zum Weiterarbeiten ist das Passwort nötig">🔒 Sperren</button>
         </form>
@@ -42,6 +54,9 @@
     <a href="{{ url_for('einstellungen.seite') }}#lizenz">Lizenznummer eingeben</a>
   </div>
   {% endif %}
+  {% if NETZWERK and BENUTZER and not DARF_AENDERN %}
+  <div class="testlizenz-band" role="note"><strong>Nur lesen</strong> – Sie können alles ansehen und herunterladen, aber nichts ändern.</div>
+  {% endif %}
   <main class="inhalt">
     {% with meldungen = get_flashed_messages(with_categories=true) %}
       {% for art, text in meldungen %}
@@ -53,7 +68,7 @@
   <footer class="fuss">
     <span>{{ PROGRAMM_NAME }} {{ PROGRAMM_VERSION }}{% if LIZENZPFLICHT %} ·
       {% if LIZENZ %}lizenziert für {{ LIZENZ.lizenznehmer }}{% else %}Testversion{% endif %}{% endif %}</span>
-    <span>Datenordner: <span class="mono">{{ DATENORDNER }}</span></span>
+    {% if NETZWERK %}<span>Netzwerkversion</span>{% else %}<span>Datenordner: <span class="mono">{{ DATENORDNER }}</span></span>{% endif %}
   </footer>
   {% block skripte %}{% endblock %}
 </body>

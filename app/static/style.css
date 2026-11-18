@@ -441,3 +441,16 @@ iframe.beleg-vorschau { height: 560px; }
 th .tag-zeilenform { text-align: left; }
 th .tag-zeilenform .rechts { text-align: right; }
 @media (max-width: 760px) { .tag-zeilenform { grid-template-columns: 1fr 1fr; } }
+
+/* Netzwerkversion: Konto, Benutzer */
+.benutzer-knopf { color: #e6f0ec; text-decoration: none; font-size: .9rem; padding: 5px 8px; border-radius: 6px;
+  white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+.kopf-innen.mit-konto { max-width: 1280px; gap: 20px; }
+.kopf-innen.mit-konto .hauptnav a { padding: 6px 9px; }
+.benutzer-knopf:hover { background: rgba(255,255,255,.12); }
+.benutzer-raster { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; align-items: end; }
+.benutzer-zeile { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.benutzer-zeile select { width: auto; }
+.benutzer-zeile input[name="anzeigename"] { flex: 1 1 150px; width: auto; }
+.benutzer-zeile input[name="passwort"] { flex: 1 1 170px; width: auto; }
+.rollenliste { margin: 0; padding-left: 1.2rem; line-height: 1.7; }

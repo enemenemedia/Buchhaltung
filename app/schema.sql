@@ -387,7 +387,8 @@ CREATE TABLE IF NOT EXISTS aenderungsprotokoll (
     bereich     TEXT    NOT NULL,          -- z. B. 'kunde'
     objekt_id   INTEGER NOT NULL,
     aktion      TEXT    NOT NULL,          -- angelegt, geaendert, archiviert, reaktiviert, geloescht
-    details     TEXT    NOT NULL DEFAULT '' -- JSON mit geänderten Feldern
+    details     TEXT    NOT NULL DEFAULT '', -- JSON mit geänderten Feldern
+    benutzer    TEXT                          -- Netzwerkversion: angemeldeter Benutzer
 );
 
 CREATE INDEX IF NOT EXISTS idx_protokoll_objekt ON aenderungsprotokoll (bereich, objekt_id);
@@ -549,3 +550,19 @@ SELECT name, kategorie, reihenfolge FROM (
     UNION ALL SELECT 'Reparaturen', 'sonstige_ausgaben', 80
     UNION ALL SELECT 'sonstige Betriebskosten', 'sonstige_ausgaben', 90
 ) WHERE NOT EXISTS (SELECT 1 FROM tags);
+
+-- Netzwerkversion: Benutzer und Rollen ------------------------------------
+-- In der Einzelplatzversion bleibt die Tabelle leer.
+CREATE TABLE IF NOT EXISTS benutzer (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    name             TEXT    NOT NULL UNIQUE COLLATE NOCASE,   -- Anmeldename
+    anzeigename      TEXT    NOT NULL DEFAULT '',
+    rolle            TEXT    NOT NULL CHECK (rolle IN ('admin', 'buchhaltung', 'lesen')),
+    passwort_hash    TEXT    NOT NULL,
+    sitzung          TEXT    NOT NULL,          -- wechselt bei Passwortänderung/Sperre: alte Anmeldungen enden
+    aktiv            INTEGER NOT NULL DEFAULT 1,
+    fehlversuche     INTEGER NOT NULL DEFAULT 0,
+    gesperrt_bis     TEXT,
+    letzte_anmeldung TEXT,
+    angelegt_am      TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
+);

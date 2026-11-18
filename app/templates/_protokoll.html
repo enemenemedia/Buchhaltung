@@ -4,7 +4,8 @@
                    'aktiviert': 'Aktiviert', 'deaktiviert': 'Deaktiviert',
                    'abgeschlossen': 'Abgeschlossen', 'status': 'Status geändert', 'kopie': 'Kopie', 'rechnung': 'Rechnung',
                    'storniert': 'Storniert', 'korrigiert': 'Korrigiert', 'xrechnung': 'XRechnung erstellt',
-                   'festgeschrieben': 'Festgeschrieben', 'zahlung': 'Zahlung erfasst', 'tags': 'Tags geändert'} %}
+                   'festgeschrieben': 'Festgeschrieben', 'zahlung': 'Zahlung erfasst', 'tags': 'Tags geändert',
+                   'passwort': 'Passwort geändert', 'anmeldung': 'Angemeldet'} %}
 
 {% macro protokoll_liste(eintraege, leer_text='Noch keine Einträge.') -%}
   {% if eintraege %}
@@ -12,7 +13,7 @@
   {% for e in eintraege %}
     <li>
       <time>{{ e.zeitpunkt|datum(true) }}</time>
-      <strong>{{ AKTIONEN.get(e.aktion, e.aktion) }}</strong>
+      <strong>{{ AKTIONEN.get(e.aktion, e.aktion) }}</strong>{% if e.benutzer %} <span class="gedimmt klein">· {{ e.benutzer }}</span>{% endif %}
       {% if e.details.felder %}
         <ul>{% for feld, werte in e.details.felder.items() %}
           {% if e.aktion == 'angelegt' %}

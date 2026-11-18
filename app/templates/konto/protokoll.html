@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "_protokoll.html" import protokoll_liste %}
+{% set BEREICHE = {'kunde': 'Kunde', 'stammdaten': 'Stammdaten', 'leistung': 'Leistung', 'angebot': 'Angebot',
+                   'rechnung': 'Rechnung', 'beleg': 'Beleg', 'tag': 'Tag', 'benutzer': 'Benutzer'} %}
+{% block titel %}Änderungsprotokoll – {{ PROGRAMM_NAME }}{% endblock %}
+{% block inhalt %}
+<nav class="brotkrumen"><a href="{{ url_for('konto.benutzer_liste') }}">Benutzer</a> › Änderungsprotokoll</nav>
+<div class="seitenkopf"><div>
+  <h1>Änderungsprotokoll</h1>
+  <p class="untertitel">Die letzten 300 Änderungen in allen Bereichen – mit dem Benutzer, der sie vorgenommen hat.</p>
+</div></div>
+<form class="filterleiste" method="get">
+  <select name="benutzer" class="schmal" aria-label="Benutzer" onchange="this.form.submit()">
+    <option value="">alle Benutzer</option>
+    {% for n in namen %}<option {% if n == wer %}selected{% endif %}>{{ n }}</option>{% endfor %}
+  </select>
+</form>
+<section class="karte">
+  <div class="tabelle-rahmen"><table class="tabelle">
+    <thead><tr><th>Zeitpunkt</th><th>Benutzer</th><th>Bereich</th><th>Änderung</th></tr></thead>
+    <tbody>
+    {% for e in eintraege %}
+      <tr><td class="klein">{{ e.zeitpunkt|datum(true) }}</td><td class="mono">{{ e.benutzer or '–' }}</td>
+        <td>{{ BEREICHE.get(e.bereich, e.bereich) }} #{{ e.objekt_id }}</td>
+        <td>{{ protokoll_liste([dict(e, benutzer=None, zeitpunkt='')]) }}</td></tr>
+    {% else %}
+      <tr><td colspan="4" class="gedimmt">Noch keine Einträge.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="gedimmt klein">„–“: Änderung aus der Einzelplatzversion oder automatisch durch das Programm.</p>
+</section>
+{% endblock %}

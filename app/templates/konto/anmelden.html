@@ -1,0 +1,17 @@
+{% extends "konto/_huelle.html" %}
+{% block titel %}Anmelden – {{ PROGRAMM_NAME }}{% endblock %}
+{% block inhalt %}
+<h1>Anmelden</h1>
+<form method="post" action="{{ url_for('konto.anmelden') }}" class="formular-spalte abstand-oben">
+  <input type="hidden" name="weiter" value="{{ weiter }}">
+  <label class="feld"><span>Anmeldename</span>
+    <input name="name" value="{{ name }}" required autofocus autocomplete="username" autocapitalize="none"></label>
+  <label class="feld {% if fehler %}hat-fehler{% endif %}"><span>Passwort</span>
+    <input type="password" name="passwort" required autocomplete="current-password">
+    {% if fehler %}<small class="fehlertext">{{ fehler }}</small>{% endif %}</label>
+  <button class="knopf knopf-primaer" type="submit">Anmelden</button>
+</form>
+<p class="gedimmt klein abstand-oben">Passwort vergessen? Ein Administrator kann unter „Benutzer“ ein neues setzen.</p>
+{% if config.ZERTIFIKAT_CA %}<p class="gedimmt klein">Browser-Warnung zum Zertifikat? <a href="{{ url_for('konto.zertifikat') }}">Zertifikat herunterladen</a>
+  und einmalig als vertrauenswürdig importieren (siehe Anleitung).</p>{% endif %}
+{% endblock %}

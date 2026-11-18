@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block titel %}Benutzer – {{ PROGRAMM_NAME }}{% endblock %}
+{% block inhalt %}
+<div class="seitenkopf">
+  <div>
+    <h1>Benutzer</h1>
+    <p class="untertitel">Wer mit der Netzwerkversion arbeitet und was er darf. Jede Änderung im Programm wird mit dem
+      Anmeldenamen im Änderungsprotokoll festgehalten.</p>
+  </div>
+  <a class="knopf" href="{{ url_for('konto.gesamtprotokoll') }}">Änderungsprotokoll</a>
+</div>
+
+<section class="karte">
+  <h2>Rollen</h2>
+  <ul class="rollenliste">{% for k, v in ROLLEN.items() %}<li><strong>{{ v }}</strong> – {{ rollen_text[k] }}</li>{% endfor %}</ul>
+</section>
+
+<section class="karte">
+  <h2>Neuer Benutzer</h2>
+  {% if fehler %}<div class="meldung meldung-fehler">{{ fehler }}</div>{% endif %}
+  <form method="post" action="{{ url_for('konto.benutzer_neu') }}" class="benutzer-raster">
+    <label class="feld"><span>Anmeldename <em>*</em></span><input name="name" required autocapitalize="none" value="{{ eingabe.get('name', '') }}"></label>
+    <label class="feld"><span>Anzeigename</span><input name="anzeigename" maxlength="80" value="{{ eingabe.get('anzeigename', '') }}"></label>
+    <label class="feld"><span>Rolle</span><select name="rolle">{% for k, v in ROLLEN.items() %}
+      <option value="{{ k }}" {% if k == eingabe.get('rolle', 'buchhaltung') %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+    <label class="feld"><span>Passwort <em>*</em></span><input type="password" name="passwort" required minlength="{{ passwort_min }}" autocomplete="new-password"></label>
+    <label class="feld"><span>Wiederholen <em>*</em></span><input type="password" name="wiederholung" required autocomplete="new-password"></label>
+    <button class="knopf knopf-primaer">Anlegen</button>
+  </form>
+  <p class="gedimmt klein">Passwörter: mindestens {{ passwort_min }} Zeichen. Teilen Sie das Passwort persönlich mit; der Benutzer kann es danach selbst ändern.</p>
+</section>
+
+<section class="karte">
+  <h2>Vorhandene Benutzer</h2>
+  <div class="tabelle-rahmen">
+  <table class="tabelle">
+    <thead><tr><th>Anmeldename</th><th colspan="2">Anzeigename · Rolle · Aktiv · neues Passwort</th><th>Letzte Anmeldung</th></tr></thead>
+    <tbody>
+    {% for b in benutzer %}
+      <tr class="{% if not b.aktiv %}gedimmt{% endif %}">
+        <td class="mono"><strong>{{ b.name }}</strong>{% if b.id == BENUTZER.id %} <span class="klein">(Sie)</span>{% endif %}</td>
+        <td colspan="2">
+          <form method="post" action="{{ url_for('konto.benutzer_aendern', benutzer_id=b.id) }}" class="benutzer-zeile">
+            <input name="anzeigename" value="{{ b.anzeigename }}" maxlength="80" aria-label="Anzeigename">
+            <select name="rolle" aria-label="Rolle">{% for k, v in ROLLEN.items() %}<option value="{{ k }}" {% if k == b.rolle %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+            <label class="haken-inline klein"><input type="checkbox" name="aktiv" value="1" {% if b.aktiv %}checked{% endif %}> aktiv</label>
+            <input type="password" name="passwort" minlength="{{ passwort_min }}" placeholder="neues Passwort (optional)" autocomplete="new-password" aria-label="Neues Passwort">
+            <button class="knopf">Speichern</button>
+          </form>
+        </td>
+        <td class="klein">{{ b.letzte_anmeldung|datum(true) if b.letzte_anmeldung else '–' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="gedimmt klein">Benutzer werden nicht gelöscht, sondern deaktiviert – ihr Name bleibt im Änderungsprotokoll nachvollziehbar.
+    Rollenwechsel, Deaktivieren und neues Passwort beenden bestehende Anmeldungen.</p>
+</section>
+{% endblock %}

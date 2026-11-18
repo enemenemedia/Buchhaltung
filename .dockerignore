@@ -1,0 +1,7 @@
+*
+!app/
+!netzwerk/entrypoint.sh
+!requirements-netzwerk.txt
+!LICENSE
+**/__pycache__
+**/*.pyc

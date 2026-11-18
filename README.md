@@ -25,6 +25,34 @@ in der Belegerfassung und damit in der EÜR.
 | **Einnahmen-Überschuss-Rechnung** (mit AfA, Anlagenverzeichnis, PDF/CSV) | ✅ fertig |
 | **Tags** für Belege, Auswertung und CSV nach Tags | ✅ fertig (1.1) |
 | Lizenzpflicht | vorerst abgeschaltet (1.1) – XRechnung ohne Lizenznummer |
+| **Netzwerkversion** (Docker, Benutzer und Rollen, HTTPS) | ✅ fertig (1.2) |
+
+## Netzwerkversion (Docker auf Linux-Server oder NAS)
+
+Eigene Auslieferung aus demselben Code: Der Schalter `BUCHHALTUNG_NETZWERK=1` (bzw.
+`create_app(..., netzwerk=True)`) schaltet Anmeldung, Benutzer mit Rollen (Administrator,
+Buchhaltung, Nur lesen), den Benutzernamen im Änderungsprotokoll und die Beschränkung auf das
+lokale Netz ein. `python -m app.netzwerk.server` startet den HTTPS-Server (gunicorn, ein Prozess
+mit mehreren Threads) mit selbst erzeugter Zertifizierungsstelle und Serverzertifikat
+(`app/netzwerk/zertifikat.py`). Die Einzelplatzversion bleibt unverändert.
+
+| Datei | Inhalt |
+|---|---|
+| `netzwerk/Dockerfile`, `netzwerk/entrypoint.sh` | Image auf Basis `python:3.12-slim`, läuft als `PUID`/`PGID` statt root |
+| `netzwerk/docker-compose.yml` | Vorlage für Server/NAS |
+| `netzwerk/ANLEITUNG.md` | Installation, Einrichtung, Zertifikat importieren, Sicherung, Umzug |
+| `.github/workflows/netzwerk-image.yml` | baut bei Tag `v*` das Image (amd64 + arm64) nach `ghcr.io/enemenemedia/buchhaltung` |
+| `werkzeuge/netzwerk_paket.py` | erzeugt `dist/Buchhaltung-fuer-KMU-Netzwerk-<Version>.zip` |
+
+```sh
+docker build -f netzwerk/Dockerfile -t buchhaltung-kmu:1.2.0 .
+docker run -d -p 8443:8443 -v ./daten:/daten -e BUCHHALTUNG_HOSTNAMEN=nas,192.168.1.10 buchhaltung-kmu:1.2.0
+docker logs <container>     # Einrichtungscode für den ersten Administrator
+```
+
+Rechte: *Nur lesen* darf ausschließlich GET-Anfragen (ansehen, PDF/CSV); *Buchhaltung* alles außer
+Benutzerverwaltung, Einstellungen und dem Ändern der Stammdaten. Die Prüfung läuft zentral vor jeder
+Anfrage (`app/netzwerk/__init__.py`, `erlaubt()`).
 
 ## Installation unter Windows
 
