@@ -13,7 +13,11 @@
 ; - Installation ohne Administratorrechte für den angemeldeten Benutzer
 ; - Programmordner: %LOCALAPPDATA%\Programs\Buchhaltung für KMU (änderbar)
 ; - Datenordner:    Dokumente\Buchhaltung für KMU (änderbar; bei Updates wird der bisherige übernommen;
-;                   vorhandene Daten von „X-Rechnung für KMU“ können weiterverwendet werden)
+;                   vorhandene Daten von „X-Rechnung für KMU“ können weiterverwendet werden;
+;                   der Ordner muss für den angemeldeten Benutzer erreichbar und beschreibbar sein –
+;                   geprüft beim Weiterklicken bzw. bei /S im Abschnitt: vollständiger Pfad, nicht im
+;                   Programm-/Windows-Ordner oder im Profil eines anderen Benutzers, Schreibtest;
+;                   Hinweis bei Wechseldatenträger und Netzlaufwerk)
 ; - INI-Dateien werden als UTF-16 angelegt, damit Umlaute (Pfad, Lizenznehmer) erhalten bleiben
 ; - Deinstallation entfernt das Programm, NICHT die Daten (Aufbewahrungspflichten!)
 
@@ -93,7 +97,7 @@ Var FeldNummer
 
 !define MUI_PAGE_HEADER_TEXT "Datenordner"
 !define MUI_PAGE_HEADER_SUBTEXT "Wo sollen Datenbank, Rechnungen und Belege gespeichert werden?"
-!define MUI_DIRECTORYPAGE_TEXT_TOP "Hier legt das Programm die Datenbank, je Kunde Angebote und Rechnungen (XML und PDF) sowie die Belegablage an. Wählen Sie einen Ordner, der regelmäßig gesichert wird. Bei einer Aktualisierung wird der bisherige Datenordner vorgeschlagen.$DATENHINWEIS"
+!define MUI_DIRECTORYPAGE_TEXT_TOP "Hier legt das Programm die Datenbank, je Kunde Angebote und Rechnungen (XML und PDF) sowie die Belegablage an. Der Ordner muss für Ihr Windows-Benutzerkonto erreichbar und beschreibbar sein (z. B. unter Dokumente oder auf einem eigenen Datenlaufwerk) – das wird beim Weiterklicken geprüft. Bei einer Aktualisierung wird der bisherige Datenordner vorgeschlagen.$DATENHINWEIS"
 !define MUI_DIRECTORYPAGE_TEXT_DESTINATION "Datenordner"
 !define MUI_DIRECTORYPAGE_VARIABLE $DATEN
 !define MUI_PAGE_CUSTOMFUNCTION_PRE DatenseiteVorbereiten
@@ -220,13 +224,126 @@ Function ProgrammStarten
 FunctionEnd
 
 Function DatenordnerPruefen
-  ; Der Datenordner darf nicht im Programmordner liegen – sonst würde er bei der
-  ; Deinstallation gelöscht.
-  StrLen $0 "$INSTDIR"
-  StrCpy $1 "$DATEN" $0
-  ${If} $1 == "$INSTDIR"
-    MessageBox MB_ICONEXCLAMATION|MB_OK "Der Datenordner darf nicht innerhalb des Programmordners liegen.$\r$\nBitte einen anderen Ordner wählen."
+  Call DatenordnerBewerten
+  ${If} $0 != ""
+    MessageBox MB_ICONEXCLAMATION|MB_OK "$0"
     Abort
+  ${EndIf}
+  ${If} $1 != ""
+    MessageBox MB_ICONINFORMATION|MB_OKCANCEL "$1$\r$\n$\r$\nTrotzdem diesen Ordner verwenden?" IDOK +2
+    Abort
+  ${EndIf}
+FunctionEnd
+
+; Setzt $0, wenn $DATEN gleich ORDNER ist oder darin liegt (Vergleich mit abschließendem Backslash, ohne Groß/klein)
+!macro NichtUnterOrdner ORDNER
+  ${If} $0 == ""
+    StrLen $R3 "${ORDNER}\"
+    StrCpy $R1 "$DATEN\" $R3
+    ${If} $R1 == "${ORDNER}\"
+      StrCpy $0 "Der Ordner ${ORDNER} ist für Programme bzw. Windows reserviert – dort können Daten nicht sicher gespeichert werden.$\r$\nBitte einen Ordner unter „Dokumente“, auf einem eigenen Datenlaufwerk oder einem Netzlaufwerk wählen."
+    ${EndIf}
+  ${EndIf}
+!macroend
+
+; Der Datenordner muss für den angemeldeten Benutzer erreichbar und beschreibbar sein – das Programm
+; läuft mit dessen Rechten. Ergebnis: $0 = Fehler (leer = in Ordnung), $1 = Hinweis zum Bestätigen.
+Function DatenordnerBewerten
+  StrCpy $0 ""
+  StrCpy $1 ""
+  ReadEnvStr $R0 "USERNAME"
+  ; abschließenden Backslash entfernen
+  StrCpy $R1 $DATEN 1 -1
+  ${If} $R1 == "\"
+    StrCpy $R1 $DATEN 3
+    ${If} $R1 != $DATEN
+      StrCpy $DATEN $DATEN -1
+    ${EndIf}
+  ${EndIf}
+  ; vollständiger Pfad: Laufwerk (C:\…) oder Netzwerkpfad (\\Server\Freigabe\…)
+  StrCpy $R1 $DATEN 2
+  StrCpy $R2 $DATEN 1 1
+  ${If} $R1 != "\\"
+  ${AndIf} $R2 != ":"
+    StrCpy $0 "Bitte einen vollständigen Pfad angeben, z. B. $DOCUMENTS\${NAME}."
+    Return
+  ${EndIf}
+  StrLen $R3 $DATEN
+  ${If} $R3 <= 3
+    StrCpy $0 "Bitte nicht das Hauptverzeichnis eines Laufwerks wählen, sondern einen Ordner darin, z. B. $DATEN${NAME}."
+    Return
+  ${EndIf}
+
+  ; nicht im Programmordner (würde bei der Deinstallation gelöscht)
+  StrLen $R3 "$INSTDIR"
+  StrCpy $R1 "$DATEN" $R3
+  ${If} $R1 == "$INSTDIR"
+    StrCpy $0 "Der Datenordner darf nicht innerhalb des Programmordners liegen.$\r$\nBitte einen anderen Ordner wählen."
+    Return
+  ${EndIf}
+  ; nicht in Windows- oder Programmverzeichnissen (dort darf ein normaler Benutzer nicht schreiben)
+  !insertmacro NichtUnterOrdner "$WINDIR"
+  !insertmacro NichtUnterOrdner "$PROGRAMFILES32"
+  !insertmacro NichtUnterOrdner "$PROGRAMFILES64"
+  ${If} $0 != ""
+    Return
+  ${EndIf}
+  ; nicht im Benutzerprofil eines anderen Benutzers (C:\Users\<anderer>\…)
+  ${GetParent} "$PROFILE" $R4
+  StrLen $R3 "$R4\"
+  StrCpy $R1 "$DATEN" $R3
+  ${If} $R1 == "$R4\"
+    StrLen $R3 "$PROFILE\"
+    StrCpy $R1 "$DATEN\" $R3
+    StrLen $R3 "$R4\Public\"
+    StrCpy $R5 "$DATEN\" $R3
+    ${If} $R1 != "$PROFILE\"
+    ${AndIf} $R5 != "$R4\Public\"
+      StrCpy $0 "Der Ordner liegt im Benutzerprofil eines anderen Windows-Benutzers.$\r$\nDas Programm läuft unter Ihrem Benutzerkonto ($R0) und braucht einen Ordner, auf den Sie selbst zugreifen können – z. B. $DOCUMENTS\${NAME}."
+      Return
+    ${EndIf}
+  ${EndIf}
+
+  ; erreichbar und beschreibbar? (Ordner anlegen, Testdatei schreiben und wieder löschen)
+  StrCpy $R6 "0"
+  ${IfNot} ${FileExists} "$DATEN\*.*"
+    StrCpy $R6 "1"
+  ${EndIf}
+  ClearErrors
+  CreateDirectory "$DATEN"
+  ${If} ${Errors}
+  ${OrIfNot} ${FileExists} "$DATEN\*.*"
+    StrCpy $0 "Der Ordner$\r$\n$DATEN$\r$\nkann für Ihr Benutzerkonto ($R0) nicht angelegt werden. Ist das Laufwerk verbunden und haben Sie dort Schreibrechte?$\r$\nBitte einen anderen Ordner wählen."
+    Return
+  ${EndIf}
+  ClearErrors
+  FileOpen $R7 "$DATEN\.schreibtest-setup" w
+  ${If} ${Errors}
+    ${If} $R6 == "1"
+      RMDir "$DATEN"
+    ${EndIf}
+    StrCpy $0 "In den Ordner$\r$\n$DATEN$\r$\nkann Ihr Benutzerkonto ($R0) nicht schreiben. Das Programm braucht dort Lese- und Schreibrechte.$\r$\nBitte einen anderen Ordner wählen."
+    Return
+  ${EndIf}
+  FileWrite $R7 "ok"
+  FileClose $R7
+  Delete "$DATEN\.schreibtest-setup"
+  ${If} $R6 == "1"
+    RMDir "$DATEN"                ; wird bei der Installation angelegt
+  ${EndIf}
+
+  ; Hinweise: Wechseldatenträger und Netzlaufwerke
+  StrCpy $R1 $DATEN 2
+  ${If} $R1 == "\\"
+    StrCpy $1 "Der Datenordner liegt auf einem Netzlaufwerk. Die Einzelplatzversion darf ihn immer nur von EINEM PC aus verwenden – für mehrere PCs gibt es die Netzwerkversion. Ist das Netzlaufwerk nicht erreichbar, startet das Programm nicht."
+  ${Else}
+    StrCpy $R1 $DATEN 3
+    System::Call 'kernel32::GetDriveTypeW(w "$R1") i .R2'
+    ${If} $R2 == 2
+      StrCpy $1 "Das Laufwerk $R1 ist ein Wechseldatenträger (z. B. USB-Stick). Das Programm startet nur, wenn er angeschlossen ist, und Daten gehen mit dem Datenträger leicht verloren. Für Sicherungen gibt es im Programm den Knopf „Sichern“."
+    ${ElseIf} $R2 == 4
+      StrCpy $1 "Das Laufwerk $R1 ist ein verbundenes Netzlaufwerk. Es muss bei jeder Anmeldung verbunden sein, und die Einzelplatzversion darf es immer nur von EINEM PC aus verwenden – für mehrere PCs gibt es die Netzwerkversion."
+    ${EndIf}
   ${EndIf}
 FunctionEnd
 
@@ -273,6 +390,13 @@ FunctionEnd
 ; --- Installation -------------------------------------------------------------------
 Section "Programm" SecProgramm
   SectionIn RO
+  ; unbeaufsichtigt (/S) gibt es keine Seiten: Datenordner hier prüfen, bevor etwas installiert wird
+  ${If} ${Silent}
+    Call DatenordnerBewerten
+    ${If} $0 != ""
+      Abort "$0"
+    ${EndIf}
+  ${EndIf}
   !insertmacro LaufendeBeenden
 
   ; Erst in einen Zwischenordner entpacken – eine vorhandene Installation bleibt unverändert,

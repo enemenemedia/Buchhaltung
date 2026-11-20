@@ -3,7 +3,7 @@
 # Danach im Browser:  https://<IP-oder-Name-des-Servers>:8443/
 services:
   buchhaltung:
-    image: ghcr.io/enemenemedia/buchhaltung:1.4.0
+    image: ghcr.io/enemenemedia/buchhaltung:1.5.0
     # Alternativ aus den Quellen bauen (statt „image:“):
     # build: { context: .., dockerfile: netzwerk/Dockerfile }
     container_name: buchhaltung-kmu

@@ -130,11 +130,12 @@ def zu_sichern(daten: Path, datenbank: Path) -> list[Path]:
     """Alle Dateien im Datenordner außer Datenbank (wird gesondert gesichert) und Hilfsdateien."""
     dateien = []
     for wurzel, ordner, namen in os.walk(daten):
-        ordner[:] = sorted(o for o in ordner if o not in AUSSCHLUSS_ORDNER and not o.startswith(".sicherung"))
+        ordner[:] = sorted(o for o in ordner if o not in AUSSCHLUSS_ORDNER
+                           and not o.startswith((".sicherung", ".wiederherstellung")))
         for n in sorted(namen):
             p = Path(wurzel) / n
             if (p == datenbank or n in AUSSCHLUSS_NAMEN or n.endswith(AUSSCHLUSS_ENDUNGEN)
-                    or n.startswith(".schreibtest") or not p.is_file()):
+                    or n.startswith((".schreibtest", ".wiederherstellung")) or not p.is_file()):
                 continue
             dateien.append(p)
     return dateien
@@ -303,3 +304,205 @@ def groesse_text(n: int) -> str:
             return (f"{n:.0f} {einheit}" if einheit == "Byte" else f"{n:.1f} {einheit}").replace(".", ",")
         n /= 1024
     return str(n)
+
+
+# ---------------------------------------------------------------------------
+# Wiederherstellen
+# ---------------------------------------------------------------------------
+
+NEU = ".wiederherstellung-neu"
+ALT = ".wiederherstellung-alt"
+UPLOAD = ".wiederherstellung-upload.zip"
+VORHER = ".sicherungen-vor-wiederherstellung"     # Stand vor jeder Wiederherstellung (ZIP), nicht mitgesichert
+VORHER_BEHALTEN = 5
+# bleiben beim Austausch im Datenordner stehen
+BLEIBEN = AUSSCHLUSS_NAMEN | AUSSCHLUSS_ORDNER | {NEU, ALT, UPLOAD, VORHER}
+
+
+def _version(text: str) -> tuple:
+    try:
+        return tuple(int(t) for t in text.split(".")[:3])
+    except (AttributeError, ValueError):
+        return (0,)
+
+
+def zip_verschluesselt(pfad: Path) -> bool:
+    try:
+        with zipfile.ZipFile(pfad) as z:
+            return any(i.flag_bits & 0x1 for i in z.infolist())
+    except (OSError, zipfile.BadZipFile):
+        return False
+
+
+def gefundene(ordner: list[str | Path], grenze: int = 12) -> list[dict]:
+    """Sicherungsdateien in den bisher verwendeten Zielordnern, neueste zuerst."""
+    treffer: dict[Path, dict] = {}
+    for o in ordner:
+        try:
+            for p in Path(o).glob("Buchhaltung-Sicherung_*.zip"):
+                st = p.stat()
+                treffer[p] = {"pfad": str(p), "name": p.name, "groesse": st.st_size,
+                              "geaendert": datetime.fromtimestamp(st.st_mtime).replace(microsecond=0),
+                              "verschluesselt": zip_verschluesselt(p)}
+        except OSError:
+            continue
+    return sorted(treffer.values(), key=lambda t: t["geaendert"], reverse=True)[:grenze]
+
+
+def _sicherer_name(rel: str) -> bool:
+    teile = rel.split("/")
+    return (bool(rel) and not rel.startswith("/") and "\\" not in rel and ":" not in rel
+            and all(t not in ("", ".", "..") for t in teile) and teile[0] not in BLEIBEN)
+
+
+def lesen(pfad: Path, passwort: str | None = None) -> dict:
+    """Prüft, ob die Datei eine Sicherung dieses Programms ist, und liefert sicherung.json."""
+    if not Path(pfad).is_file():
+        raise SicherungsFehler(f"Die Datei {pfad} wurde nicht gefunden.")
+    verschluesselt = zip_verschluesselt(pfad)
+    if verschluesselt and not passwort:
+        raise SicherungsFehler("Diese Sicherung ist mit einem Passwort geschützt – bitte das Passwort angeben.")
+    import pyzipper
+
+    try:
+        with pyzipper.AESZipFile(pfad) as z:
+            if passwort:
+                z.setpassword(passwort.encode("utf-8"))
+            manifest = json.loads(z.read(MANIFEST).decode("utf-8"))
+    except KeyError:
+        raise SicherungsFehler("Die Datei ist keine Datensicherung von Buchhaltung für KMU "
+                               "(sicherung.json fehlt).") from None
+    except RuntimeError as e:
+        if "password" in str(e).lower():
+            raise SicherungsFehler("Das Passwort der Sicherung ist falsch.") from None
+        raise SicherungsFehler(f"Die Sicherung kann nicht gelesen werden: {e}") from e
+    except (OSError, zipfile.BadZipFile, pyzipper.BadZipFile, ValueError) as e:
+        raise SicherungsFehler(f"Die Datei ist keine gültige ZIP-Datei: {e}") from e
+    if manifest.get("programm") != PROGRAMM_NAME or not isinstance(manifest.get("dateien"), list):
+        raise SicherungsFehler("Die Datei ist keine Datensicherung von Buchhaltung für KMU.")
+    if _version(manifest.get("version", "0")) > _version(__version__):
+        raise SicherungsFehler(f"Die Sicherung stammt von Version {manifest.get('version')} – bitte zuerst das "
+                               f"Programm aktualisieren (installiert: {__version__}).")
+    for d in manifest["dateien"]:
+        if not _sicherer_name(str(d.get("pfad", ""))):
+            raise SicherungsFehler(f"Die Sicherung enthält einen ungültigen Dateinamen: {d.get('pfad')!r}")
+    manifest["zip_verschluesselt"] = verschluesselt
+    return manifest
+
+
+def _entpacken(pfad: Path, passwort: str | None, manifest: dict, ziel: Path) -> None:
+    import pyzipper
+
+    if ziel.exists():
+        shutil.rmtree(ziel)
+    ziel.mkdir(parents=True)
+    with pyzipper.AESZipFile(pfad) as z:
+        if passwort:
+            z.setpassword(passwort.encode("utf-8"))
+        for d in manifest["dateien"]:
+            rel = d["pfad"]
+            datei = ziel.joinpath(*rel.split("/"))
+            datei.parent.mkdir(parents=True, exist_ok=True)
+            h = hashlib.sha256()
+            try:
+                with z.open(rel) as quelle, open(datei, "wb") as aus:
+                    for block in iter(lambda: quelle.read(1 << 20), b""):
+                        h.update(block)
+                        aus.write(block)
+            except KeyError:
+                raise SicherungsFehler(f"Die Sicherung ist unvollständig: {rel} fehlt.") from None
+            except (RuntimeError, zipfile.BadZipFile, pyzipper.BadZipFile) as e:
+                raise SicherungsFehler(f"Die Sicherung ist beschädigt ({rel}): {e}") from e
+            if h.hexdigest() != d.get("sha256"):
+                raise SicherungsFehler(f"Prüfsumme stimmt nicht – die Sicherung ist beschädigt ({rel}).")
+
+
+def _vorher_sichern(alt: Path, daten: Path) -> Path | None:
+    """Bisherigen Stand als ZIP aufheben (für den Fall, dass die falsche Sicherung gewählt wurde)."""
+    dateien = [p for p in alt.rglob("*") if p.is_file()]
+    if not dateien:
+        return None
+    ordner = daten / VORHER
+    ordner.mkdir(exist_ok=True)
+    ziel = ordner / f"Vor-Wiederherstellung_{datetime.now():%Y-%m-%d_%H%M%S}.zip"
+    with zipfile.ZipFile(ziel, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+        for p in dateien:
+            z.write(p, p.relative_to(alt).as_posix())
+    for alte in sorted(ordner.glob("Vor-Wiederherstellung_*.zip"))[:-VORHER_BEHALTEN]:
+        alte.unlink(missing_ok=True)
+    return ziel
+
+
+def wiederherstellen(daten: Path, datenbank: Path, quelle: Path, passwort: str | None = None) -> dict:
+    """Ersetzt den Inhalt des Datenordners durch die Sicherung.
+
+    1. Sicherung vollständig prüfen und in einen Zwischenordner entpacken (SHA-256 je Datei, Datenbank-Prüfung).
+    2. Bisherige Dateien in einen zweiten Zwischenordner verschieben, neue an ihre Stelle – schlägt das fehl,
+       wird der alte Stand sofort zurückverschoben.
+    3. Den bisherigen Stand als ZIP unter .sicherungen-vor-wiederherstellung aufheben (die letzten 5).
+    Die Datenbank-Verbindungen müssen vorher geschlossen sein."""
+    daten = Path(daten)
+    manifest = lesen(quelle, passwort)
+    try:
+        frei = shutil.disk_usage(daten).free
+    except OSError:
+        frei = None
+    if frei is not None and frei < 2 * int(manifest.get("groesse", 0)) + 20 * 1024 * 1024:
+        raise SicherungsFehler("Im Datenordner ist nicht genug Platz frei für die Wiederherstellung.")
+
+    neu, alt = daten / NEU, daten / ALT
+    try:
+        _entpacken(quelle, passwort, manifest, neu)
+        db_neu = neu / datenbank.name
+        if not db_neu.is_file():
+            raise SicherungsFehler("Die Sicherung enthält keine Datenbank.")
+        if not manifest.get("datenbank_verschluesselt"):
+            con = sqlite3.connect(db_neu)
+            try:
+                ok = con.execute("PRAGMA integrity_check").fetchone()[0]
+            except sqlite3.DatabaseError as e:
+                raise SicherungsFehler(f"Die Datenbank in der Sicherung ist beschädigt: {e}") from e
+            finally:
+                con.close()
+            if ok != "ok":
+                raise SicherungsFehler(f"Die Datenbank in der Sicherung ist beschädigt: {ok}")
+    except BaseException:
+        shutil.rmtree(neu, ignore_errors=True)
+        raise
+
+    # Austausch
+    if alt.exists():
+        shutil.rmtree(alt)
+    alt.mkdir()
+    verschoben_alt: list[str] = []
+    verschoben_neu: list[str] = []
+    try:
+        for p in list(daten.iterdir()):
+            if p.name in BLEIBEN:
+                continue
+            os.replace(p, alt / p.name)
+            verschoben_alt.append(p.name)
+        for p in list(neu.iterdir()):
+            os.replace(p, daten / p.name)
+            verschoben_neu.append(p.name)
+    except OSError as e:
+        for n in verschoben_neu:                       # zurückrollen
+            ziel = daten / n
+            shutil.rmtree(ziel, ignore_errors=True) if ziel.is_dir() else ziel.unlink(missing_ok=True)
+        for n in verschoben_alt:
+            os.replace(alt / n, daten / n)
+        shutil.rmtree(neu, ignore_errors=True)
+        shutil.rmtree(alt, ignore_errors=True)
+        raise SicherungsFehler(f"Die Daten konnten nicht ausgetauscht werden ({e.strerror or e}). Der bisherige "
+                               "Stand ist unverändert. Ist eine Datei noch geöffnet (z. B. ein PDF)?") from e
+    shutil.rmtree(neu, ignore_errors=True)
+    try:
+        manifest["vorher"] = str(_vorher_sichern(alt, daten) or "")
+    except OSError:
+        manifest["vorher"] = str(alt)                  # ZIP ging nicht: Ordner bleibt als Kopie stehen
+    else:
+        shutil.rmtree(alt, ignore_errors=True)
+
+    if not manifest.get("datenbank_verschluesselt"):
+        db.initialisieren(datenbank)                   # ältere Sicherung: neue Spalten/Tabellen ergänzen
+    return manifest

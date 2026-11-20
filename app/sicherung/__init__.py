@@ -1,5 +1,6 @@
-"""Datensicherung: Knopf „Datensicherung“ oben rechts → Ziel wählen (beliebiges Laufwerk oder Download),
-optional mit Passwort (AES-256). Jede Sicherung wird im Änderungsprotokoll vermerkt."""
+"""Datensicherung und Wiederherstellung: Knopf „Sichern“ oben rechts → Ziel wählen (beliebiges Laufwerk
+oder Download), optional mit Passwort (AES-256); „Wiederherstellen“ spielt eine Sicherung zurück
+(aus den bisherigen Zielordnern, von einem Pfad oder hochgeladen). Beides steht im Änderungsprotokoll."""
 
 from __future__ import annotations
 
@@ -22,7 +23,7 @@ ERINNERUNG_TAGE = 30
 
 def letzte_sicherung(con) -> dict | None:
     z = con.execute("SELECT zeitpunkt, details, benutzer FROM aenderungsprotokoll WHERE bereich = ? "
-                    "ORDER BY id DESC LIMIT 1", (BEREICH,)).fetchone()
+                    "AND aktion = 'erstellt' ORDER BY id DESC LIMIT 1", (BEREICH,)).fetchone()
     if z is None:
         return None
     d = json.loads(z["details"] or "{}")
@@ -52,7 +53,14 @@ def _laufwerke_erlaubt() -> bool:
     return current_app.config.get("SICHERUNG_LAUFWERKE", True)
 
 
-def _seite(status: int = 200, fehler: str | None = None):
+def _zielordner_bisher(con) -> list[str]:
+    ziele = [json.loads(z[0] or "{}").get("ziel") for z in con.execute(
+        "SELECT details FROM aenderungsprotokoll WHERE bereich = ? AND aktion = 'erstellt' "
+        "ORDER BY id DESC LIMIT 30", (BEREICH,))]
+    return [z for z in dict.fromkeys(ziele) if z and z != "Download"]
+
+
+def _seite(status: int = 200, fehler: str | None = None, fehler_wiederherstellen: str | None = None):
     con = db.get_db()
     letzte = letzte_sicherung(con)
     daten, datenbank, _ = _quelle()
@@ -66,7 +74,11 @@ def _seite(status: int = 200, fehler: str | None = None):
                            laufwerke=service.laufwerke() if _laufwerke_erlaubt() else [],
                            laufwerke_erlaubt=_laufwerke_erlaubt(), vorschlag=vorschlag, fehler=fehler,
                            passwort_min=service.PASSWORT_MIN, groesse=service.groesse_text,
-                           daten=daten), status
+                           daten=daten, fehler_wiederherstellen=fehler_wiederherstellen,
+                           gefunden=service.gefundene(_zielordner_bisher(con)) if _laufwerke_erlaubt() else [],
+                           wiederhergestellt=con.execute(
+                               "SELECT zeitpunkt, details, benutzer FROM aenderungsprotokoll WHERE bereich = ? AND "
+                               "aktion = 'wiederhergestellt' ORDER BY id DESC LIMIT 1", (BEREICH,)).fetchone()), status
 
 
 @bp.get("/")
@@ -141,3 +153,79 @@ def _hinweis():
         return {}
     return {"SICHERUNG_FAELLIG": letzte is None or (letzte.get("tage") or 0) >= ERINNERUNG_TAGE,
             "SICHERUNG_LETZTE": letzte}
+
+
+# ---------------------------------------------------------------------------
+# Wiederherstellen
+# ---------------------------------------------------------------------------
+
+@bp.before_app_request
+def _wartung():
+    """Während eine Sicherung zurückgespielt wird, warten alle anderen Anfragen (Netzwerkversion)."""
+    if current_app.config.get("WIEDERHERSTELLUNG_LAEUFT") and request.endpoint != "static":
+        return ("Die Daten werden gerade aus einer Sicherung wiederhergestellt. Bitte in einer Minute neu laden.",
+                503, {"Retry-After": "30", "Content-Type": "text/plain; charset=utf-8"})
+    return None
+
+
+@bp.post("/wiederherstellen")
+def wiederherstellen():
+    f = request.form
+    cfg = current_app.config
+    daten, datenbank, _ = _quelle()
+    if f.get("bestaetigt") != "1":
+        return _seite(400, fehler_wiederherstellen="Bitte bestätigen, dass der jetzige Stand ersetzt werden soll.")
+    hochgeladen = request.files.get("datei")
+    upload = daten / service.UPLOAD
+    if hochgeladen and hochgeladen.filename:
+        hochgeladen.save(upload)
+        quelle = upload
+    elif _laufwerke_erlaubt() and (f.get("gefunden") or f.get("pfad_zip", "").strip()):
+        quelle = Path((f.get("pfad_zip", "").strip().strip('"')) or f["gefunden"])
+    else:
+        return _seite(400, fehler_wiederherstellen="Bitte eine Sicherung auswählen oder hochladen.")
+
+    passwort = f.get("passwort_zip", "") or None
+    benutzer = protokoll.angemeldeter_benutzer()
+    try:
+        with _sperre():
+            db.schliessen()                             # eigene Verbindung zu, andere Anfragen warten
+            cfg["WIEDERHERSTELLUNG_LAEUFT"] = True
+            try:
+                manifest = service.wiederherstellen(daten, datenbank, quelle, passwort)
+            finally:
+                cfg["WIEDERHERSTELLUNG_LAEUFT"] = False
+    except service.SicherungsFehler as e:
+        upload.unlink(missing_ok=True)
+        return _seite(400, fehler_wiederherstellen=str(e))
+    upload.unlink(missing_ok=True)
+
+    try:
+        erstellt = datetime.fromisoformat(manifest.get("erstellt", "")).strftime("%d.%m.%Y %H:%M")
+    except ValueError:
+        erstellt = manifest.get("erstellt", "?")
+    anzahl = manifest.get("anzahl", 0)
+    gesperrt = db.ist_verschluesselt(datenbank)
+    cfg.update(DB_PASSWORT=None, GESPERRT=gesperrt)
+    text = (f"Wiederhergestellt: Stand vom {erstellt} ({anzahl} Datei{'' if anzahl == 1 else 'en'}, "
+            f"Version {manifest.get('version')}).")
+    if manifest.get("vorher"):
+        text += f" Der bisherige Stand wurde aufgehoben: {manifest['vorher']}"
+    if not gesperrt:
+        con = db.verbinden(datenbank)
+        try:
+            con.execute(
+                "INSERT INTO aenderungsprotokoll (zeitpunkt, bereich, objekt_id, aktion, details, benutzer) "
+                "VALUES (?, ?, 0, 'wiederhergestellt', ?, ?)",
+                (protokoll.jetzt(), BEREICH, json.dumps({
+                    "hinweise": [f"Sicherung vom {erstellt} ({quelle.name if quelle != upload else 'hochgeladen'})"],
+                    "quelle": str(quelle) if quelle != upload else "hochgeladen", "stand": manifest.get("erstellt"),
+                    "vorher": manifest.get("vorher")}, ensure_ascii=False), benutzer))
+            con.commit()
+        finally:
+            con.close()
+        flash(text, "ok")
+        return redirect(url_for("sicherung.seite"))
+    flash(text + " Die wiederhergestellte Datenbank ist verschlüsselt – bitte mit dem Datenbank-Passwort "
+          "entsperren, das zum Zeitpunkt der Sicherung galt.", "ok")
+    return redirect(url_for("einstellungen.entsperren"))

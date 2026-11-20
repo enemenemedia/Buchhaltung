@@ -471,3 +471,4 @@ th .tag-zeilenform .rechts { text-align: right; }
 /* Netzwerkversion: mehr Knöpfe im Kopf – Zusatz „für KMU“ ausblenden, Benutzername kürzen */
 .kopf-innen.mit-konto .marke span { display: none; }
 .kopf-innen.mit-konto .benutzer-knopf { max-width: 110px; }
+.pfad-umbruch { word-break: break-all; min-width: 160px; }

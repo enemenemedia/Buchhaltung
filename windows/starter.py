@@ -240,8 +240,14 @@ def main(argv: list[str]) -> int:
     daten = datenordner()
     try:
         daten.mkdir(parents=True, exist_ok=True)
+        probe = daten / f".schreibtest-{os.getpid()}"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
     except OSError as e:
-        meldung(f"Der Datenordner kann nicht angelegt werden:\n{daten}\n\n{e}", fehler=True)
+        meldung(f"Der Datenordner ist für Ihr Benutzerkonto ({os.environ.get('USERNAME', '?')}) nicht erreichbar "
+                f"oder nicht beschreibbar:\n{daten}\n\n{e.strerror or e}\n\n"
+                "Ist das Laufwerk (USB-Stick, Netzlaufwerk) verbunden? Einen anderen Datenordner wählen Sie, indem "
+                "Sie das Setup erneut ausführen – Ihre Programmdaten bleiben dabei erhalten.", fehler=True)
         return 1
     log = protokoll_einrichten(daten)
 

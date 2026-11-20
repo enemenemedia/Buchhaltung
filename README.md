@@ -28,6 +28,8 @@ in der Belegerfassung und damit in der EÜR.
 | **Netzwerkversion** (Docker, Benutzer und Rollen, HTTPS) | ✅ fertig (1.2) |
 | **Netzwerkversion für Windows** (Server-PC, Daten auf Netzlaufwerk, Arbeitsplätze im Browser) | ✅ fertig (1.3) |
 | **Datensicherung** (Knopf oben rechts, beliebiges Laufwerk oder Download, optional AES-256-Passwort) | ✅ fertig (1.4) |
+| **Wiederherstellung** aus einer Sicherung (geprüft, bisheriger Stand wird aufgehoben) | ✅ fertig (1.5) |
+| Setup: Datenordner muss für den Benutzer erreichbar und beschreibbar sein (Prüfung) | ✅ fertig (1.5) |
 
 ## Datensicherung
 
@@ -46,6 +48,21 @@ Knopf **💾 Datensicherung** oben rechts (Netzwerkversion: nur Administratoren)
 - Die Datei entsteht als `.teil`, wird vollständig zurückgelesen und geprüft (CRC/AES, Abgleich mit
   `sicherung.json`) und erst dann umbenannt. Jede Sicherung steht im Änderungsprotokoll; ist die letzte
   älter als 30 Tage, wird der Knopf hervorgehoben.
+
+### Wiederherstellen (seit 1.5)
+
+Auf derselben Seite, Abschnitt **♻ Wiederherstellen**: eine Sicherung aus den bisherigen Zielordnern
+wählen (Liste, 🔒 = mit Passwort), einen Pfad angeben oder die ZIP-Datei hochladen; Bestätigung nötig.
+
+1. Prüfen: Programm und Version (keine Sicherung einer neueren Version), sichere Dateinamen (kein
+   „Zip-Slip“), Passwort, SHA-256 jeder Datei laut `sicherung.json`, `PRAGMA integrity_check` der Datenbank
+   (bei SQLCipher nach dem Entsperren). Bei jedem Fehler bleibt alles unverändert.
+2. Austauschen: neue Dateien in `.wiederherstellung-neu` entpacken, bisherige nach `.wiederherstellung-alt`
+   verschieben, neue an ihre Stelle – schlägt das fehl, wird sofort zurückverschoben. Sitzungsschlüssel,
+   Sperrdatei und Startprotokolle bleiben stehen. Während des Austauschs antworten andere Anfragen mit 503.
+3. Der bisherige Stand wird als `.sicherungen-vor-wiederherstellung/Vor-Wiederherstellung_<Zeit>.zip`
+   aufgehoben (die letzten 5; nicht Teil neuer Sicherungen). Ältere Datenbanken werden auf das aktuelle
+   Schema gebracht. War die Datenbank verschlüsselt, wird danach das damalige Passwort abgefragt.
 
 ## Netzwerkversion (Docker auf Linux-Server oder NAS)
 

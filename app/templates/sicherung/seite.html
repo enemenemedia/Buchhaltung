@@ -7,6 +7,7 @@
     <p class="untertitel">Sichert alle Daten und Dokumente – Datenbank, Belege, Rechnungen, Angebote – in eine ZIP-Datei.
       Am besten auf einen USB-Stick, eine externe Festplatte oder ein Netzlaufwerk.</p>
   </div>
+  <a class="knopf" href="#wiederherstellen">♻ Wiederherstellen</a>
 </div>
 
 {% if fehler %}<div class="meldung meldung-fehler" role="alert">{{ fehler }}</div>{% endif %}
@@ -71,10 +72,51 @@
     {% if NETZWERK %}„Herunterladen“ speichert die Datei auf <em>diesem</em> PC (Download-Ordner bzw. Speicherort des Browsers).{% endif %}</p>
 </form>
 
-<section class="karte">
-  <h2>Wiederherstellen</h2>
-  <p>Jede Sicherung enthält eine <span class="mono">LIESMICH.txt</span> mit der Anleitung: Programm beenden, den bisherigen
-    Datenordner umbenennen und den Inhalt der ZIP-Datei in einen neuen Ordner mit dem bisherigen Namen entpacken.
-    {% if not NETZWERK %}Datenordner: <span class="mono">{{ daten }}</span>{% endif %}</p>
-</section>
+<form method="post" action="{{ url_for('sicherung.wiederherstellen') }}" enctype="multipart/form-data" class="karte"
+      id="wiederherstellen" onsubmit="return confirm('Den jetzigen Stand durch die gewählte Sicherung ersetzen?\n\nDer bisherige Stand wird vorher als ZIP-Datei aufgehoben.')">
+  <h2>♻ Wiederherstellen</h2>
+  <p>Spielt eine Datensicherung zurück und <strong>ersetzt dabei alle jetzigen Daten</strong> – Datenbank, Belege und
+    Dokumente. Die Sicherung wird vorher vollständig geprüft (Passwort, Prüfsumme jeder Datei, Datenbank); ist etwas
+    nicht in Ordnung, bleibt alles unverändert. Der bisherige Stand wird als ZIP-Datei im Datenordner unter
+    <span class="mono">.sicherungen-vor-wiederherstellung</span> aufgehoben (die letzten 5).</p>
+  {% if fehler_wiederherstellen %}<div class="meldung meldung-fehler" role="alert">{{ fehler_wiederherstellen }}</div>{% endif %}
+  {% if wiederhergestellt %}<p class="gedimmt klein">Zuletzt wiederhergestellt: {{ wiederhergestellt.zeitpunkt|datum(true) }}{% if wiederhergestellt.benutzer %} von {{ wiederhergestellt.benutzer }}{% endif %}.</p>{% endif %}
+
+  <h3>Sicherung wählen</h3>
+  {% if gefunden %}
+  <div class="tabelle-rahmen"><table class="tabelle">
+    <thead><tr><th></th><th>Sicherung</th><th>Datum</th><th class="rechts">Größe</th><th>Ordner</th></tr></thead>
+    <tbody>{% for g in gefunden %}
+      <tr><td><input type="radio" name="gefunden" value="{{ g.pfad }}" id="g{{ loop.index }}" aria-label="{{ g.name }}"></td>
+        <td><label for="g{{ loop.index }}" class="mono">{{ g.name }}</label>{% if g.verschluesselt %} <span title="mit Passwort geschützt">🔒</span>{% endif %}</td>
+        <td>{{ g.geaendert.strftime('%d.%m.%Y %H:%M') }}</td><td class="rechts">{{ groesse(g.groesse) }}</td>
+        <td class="gedimmt klein pfad-umbruch">{{ g.pfad.rsplit(g.name, 1)[0] }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% elif laufwerke_erlaubt %}
+  <p class="gedimmt klein">In den bisherigen Zielordnern wurden keine Sicherungen gefunden.</p>
+  {% endif %}
+  <div class="sicherung-raster abstand-oben">
+    {% if laufwerke_erlaubt %}
+    <label class="feld"><span>… oder Pfad zur Sicherungsdatei{% if NETZWERK %} (auf dem Server-PC){% endif %}</span>
+      <input name="pfad_zip" placeholder="z. B. E:\Buchhaltung-Sicherung\Buchhaltung-Sicherung_2026-11-20_1530.zip" spellcheck="false"></label>
+    {% endif %}
+    <label class="feld"><span>{% if laufwerke_erlaubt %}… oder Datei hochladen{% else %}Sicherungsdatei hochladen{% endif %}</span>
+      <input type="file" name="datei" accept=".zip,application/zip"></label>
+  </div>
+  <div class="sicherung-raster">
+    <label class="feld"><span>Passwort der Sicherung</span>
+      <input type="password" name="passwort_zip" autocomplete="off">
+      <small>nur bei Sicherungen mit Passwort (🔒)</small></label>
+  </div>
+  <label class="haken-inline abstand-oben"><input type="checkbox" name="bestaetigt" value="1" required>
+    Mir ist bewusst, dass der jetzige Stand durch die Sicherung ersetzt wird.</label>
+  <div class="knopfgruppe abstand-oben">
+    <button class="knopf knopf-gefahr">♻ Wiederherstellen</button>
+  </div>
+  <p class="gedimmt klein abstand-oben">
+    {% if NETZWERK %}Während der Wiederherstellung können die anderen Benutzer kurz nicht arbeiten. Benutzer und Passwörter
+    entsprechen danach dem Stand der Sicherung – ggf. ist eine neue Anmeldung nötig.{% endif %}
+    War die Datenbank zum Zeitpunkt der Sicherung verschlüsselt, wird danach das damalige Datenbank-Passwort abgefragt.</p>
+</form>
 {% endblock %}

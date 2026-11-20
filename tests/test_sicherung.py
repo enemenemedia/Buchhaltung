@@ -168,3 +168,150 @@ def test_netzwerk_nur_admin_und_docker_nur_download(tmp_path):
     assert "Sicherung herunterladen" in html and "auf Laufwerk speichern" not in html
     assert admin.post("/sicherung/erstellen", data={"pfad": str(tmp_path / "x")}).status_code == 302
     assert not (tmp_path / "x").exists()
+
+
+# ---------------------------------------------------------------------------
+# Wiederherstellen
+# ---------------------------------------------------------------------------
+
+def tags(app):
+    con = db.verbinden(app.config["DATENBANK"])
+    try:
+        return [z[0] for z in con.execute("SELECT name FROM tags ORDER BY id")]
+    finally:
+        con.close()
+
+
+def sichern(client, ziel, **pw):
+    r = client.post("/sicherung/erstellen", data={"pfad": str(ziel), **pw})
+    assert r.status_code == 302, r.get_data(as_text=True)[:300]
+    return max(ziel.glob("*.zip"))
+
+
+def test_wiederherstellen_aus_gefundener_sicherung(app, client, tmp_path):
+    daten = app.config["DATENVERZEICHNIS"]
+    datei = sichern(client, tmp_path / "usb")
+    vorher_tags = tags(app)
+    # Stand verändern: Tag dazu, Beleg-Datei weg, neue Datei
+    con = db.verbinden(app.config["DATENBANK"])
+    con.execute("INSERT INTO tags (name) VALUES ('Nach der Sicherung')")
+    con.commit()
+    con.close()
+    (daten / "belege" / "2024" / "ab" / "rechnung.pdf").unlink()
+    (daten / "neu.txt").write_text("neu")
+
+    html = client.get("/sicherung/").get_data(as_text=True)
+    assert datei.name in html and 'id="wiederherstellen"' in html
+    r = client.post("/sicherung/wiederherstellen", data={"gefunden": str(datei)})
+    assert r.status_code == 400 and "bestätigen" in r.get_data(as_text=True)
+    r = client.post("/sicherung/wiederherstellen", data={"gefunden": str(datei), "bestaetigt": "1"})
+    assert r.status_code == 302, r.get_data(as_text=True)[:500]
+
+    assert tags(app) == vorher_tags
+    assert (daten / "belege" / "2024" / "ab" / "rechnung.pdf").read_bytes() == b"%PDF-1.4 beleg"
+    assert not (daten / "neu.txt").exists()
+    assert (daten / ".secret_key").exists() and (daten / "protokoll" / "start.log").exists()   # bleiben stehen
+    assert not list(daten.glob(".wiederherstellung*"))
+    (vorher,) = (daten / service.VORHER).glob("Vor-Wiederherstellung_*.zip")
+    with zipfile.ZipFile(vorher) as z:                          # bisheriger Stand aufgehoben
+        assert "neu.txt" in z.namelist() and "xrechnung.db" in z.namelist()
+    html = client.get("/sicherung/").get_data(as_text=True)
+    assert "Wiederhergestellt: Stand vom" in html and "Zuletzt wiederhergestellt" in html
+    # die Sicherungen vorher gehören nicht in die nächste Sicherung
+    with zipfile.ZipFile(sichern(client, tmp_path / "usb2")) as z:
+        assert not [n for n in z.namelist() if "wiederherstellung" in n]
+
+
+def test_wiederherstellen_mit_passwort_und_hochladen(app, client, tmp_path):
+    datei = sichern(client, tmp_path / "z", passwort="sehr-geheim", wiederholung="sehr-geheim")
+    con = db.verbinden(app.config["DATENBANK"])
+    con.execute("INSERT INTO tags (name) VALUES ('Weg damit')")
+    con.commit()
+    con.close()
+    r = client.post("/sicherung/wiederherstellen", data={"pfad_zip": str(datei), "bestaetigt": "1"})
+    assert r.status_code == 400 and "Passwort" in r.get_data(as_text=True)
+    r = client.post("/sicherung/wiederherstellen", data={"pfad_zip": str(datei), "bestaetigt": "1",
+                                                         "passwort_zip": "falsch-falsch"})
+    assert r.status_code == 400 and "Passwort der Sicherung ist falsch" in r.get_data(as_text=True)
+    assert "Weg damit" in tags(app)                             # unverändert
+    r = client.post("/sicherung/wiederherstellen", content_type="multipart/form-data",
+                    data={"datei": (io.BytesIO(datei.read_bytes()), datei.name), "bestaetigt": "1",
+                          "passwort_zip": "sehr-geheim"})
+    assert r.status_code == 302, r.get_data(as_text=True)[:500]
+    assert "Weg damit" not in tags(app)
+    assert not (app.config["DATENVERZEICHNIS"] / service.UPLOAD).exists()
+
+
+def _gefaelscht(pfad, manifest, dateien):
+    with zipfile.ZipFile(pfad, "w") as z:
+        z.writestr("sicherung.json", json.dumps(manifest))
+        for n, inhalt in dateien.items():
+            z.writestr(n, inhalt)
+    return pfad
+
+
+def test_ungueltige_sicherungen(app, client, tmp_path):
+    daten = app.config["DATENVERZEICHNIS"]
+    vorher = tags(app)
+
+    def versuch(pfad):
+        r = client.post("/sicherung/wiederherstellen", data={"pfad_zip": str(pfad), "bestaetigt": "1"})
+        assert r.status_code == 400
+        return r.get_data(as_text=True)
+
+    fremd = tmp_path / "fremd.zip"
+    with zipfile.ZipFile(fremd, "w") as z:
+        z.writestr("irgendwas.txt", "x")
+    assert "keine Datensicherung" in versuch(fremd)
+    (tmp_path / "kaputt.zip").write_bytes(b"kein zip")
+    assert "keine gültige ZIP" in versuch(tmp_path / "kaputt.zip")
+    assert "nicht gefunden" in versuch(tmp_path / "gibtsnicht.zip")
+    basis = {"programm": "Buchhaltung für KMU", "version": "1.0.0"}
+    boese = _gefaelscht(tmp_path / "b.zip", {**basis, "dateien": [{"pfad": "../../ausbruch.txt", "sha256": "x"}]},
+                        {"../../ausbruch.txt": "x"})
+    assert "ungültigen Dateinamen" in versuch(boese)
+    zukunft = _gefaelscht(tmp_path / "z.zip", {**basis, "version": "99.0.0", "dateien": []}, {})
+    assert "Version 99.0.0" in versuch(zukunft)
+    # Prüfsumme stimmt nicht → abgebrochen, nichts verändert
+    echt = sichern(client, tmp_path / "echt")
+    with zipfile.ZipFile(echt) as z:
+        manifest = json.loads(z.read("sicherung.json"))
+        inhalt = {n: z.read(n) for n in z.namelist() if n != "sicherung.json"}
+    assert "Prüfsumme" in versuch(_gefaelscht(tmp_path / "m.zip", manifest,
+                                              {**inhalt, "belege/2024/ab/rechnung.pdf": b"manipuliert"}))
+    ohne_db = {**manifest, "dateien": [d for d in manifest["dateien"] if d["pfad"] != "xrechnung.db"]}
+    assert "keine Datenbank" in versuch(_gefaelscht(tmp_path / "o.zip", ohne_db, inhalt))
+    assert tags(app) == vorher and not list(daten.glob(".wiederherstellung*"))
+    assert (daten / "belege" / "2024" / "ab" / "rechnung.pdf").read_bytes() == b"%PDF-1.4 beleg"
+
+
+def test_wiederherstellen_verschluesselte_datenbank(tmp_path):
+    pytest.importorskip("sqlcipher3")
+    a = create_app(tmp_path / "daten")
+    c = a.test_client()
+    pw = "db-passwort-123"
+    c.post("/einstellungen/verschluesseln", data={"passwort": pw, "passwort2": pw, "verstanden": "1"})
+    datei = sichern(c, tmp_path / "z")
+    c.post("/einstellungen/entschluesseln", data={"passwort": pw})
+    r = c.post("/sicherung/wiederherstellen", data={"pfad_zip": str(datei), "bestaetigt": "1"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("/einstellungen/entsperren")
+    assert a.config["GESPERRT"] is True
+    assert c.post("/einstellungen/entsperren", data={"passwort": pw}).status_code == 302
+    assert c.get("/sicherung/").status_code == 200
+
+
+def test_wiederherstellen_netzwerk(tmp_path):
+    from tests.test_netzwerk import anmelden, benutzer_anlegen, einrichten
+    a = create_app(tmp_path / "n", netzwerk=True)
+    admin = einrichten(a)
+    benutzer_anlegen(admin, "buero", "buchhaltung")
+    assert anmelden(a, "buero").post("/sicherung/wiederherstellen", data={"bestaetigt": "1"}).status_code == 403
+    a.config["WIEDERHERSTELLUNG_LAEUFT"] = True
+    r = admin.get("/belege/")
+    assert r.status_code == 503 and "wiederhergestellt" in r.get_data(as_text=True)
+    a.config["WIEDERHERSTELLUNG_LAEUFT"] = False
+    # Docker (nur Download): Wiederherstellen nur per Hochladen, Pfade werden ignoriert
+    d = create_app(tmp_path / "d", netzwerk=True, einstellungen={"SICHERUNG_LAUFWERKE": False})
+    admin = einrichten(d)
+    r = admin.post("/sicherung/wiederherstellen", data={"pfad_zip": str(tmp_path / "x.zip"), "bestaetigt": "1"})
+    assert r.status_code == 400 and "hochladen" in r.get_data(as_text=True)

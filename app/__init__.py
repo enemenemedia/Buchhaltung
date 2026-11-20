@@ -1,6 +1,6 @@
 """Buchhaltung für KMU – Flask-Anwendung (Kunden, Angebote, Rechnungen mit XRechnung, Belegerfassung, EÜR)."""
 
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 PROGRAMM_NAME = "Buchhaltung für KMU"
 
 import os
@@ -102,6 +102,8 @@ def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None, netz
         # Belegdateien (Scans, Fotos) dürfen bis 20 MB groß sein
         if request.path.startswith("/belege"):
             request.max_content_length = 21 * 1024 * 1024
+        elif request.path == "/sicherung/wiederherstellen":     # hochgeladene Datensicherung
+            request.max_content_length = 8 * 1024 ** 3
 
     @app.before_request
     def _fremde_formulare_abweisen():
