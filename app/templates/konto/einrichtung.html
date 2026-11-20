@@ -2,13 +2,21 @@
 {% block titel %}Einrichtung – {{ PROGRAMM_NAME }}{% endblock %}
 {% block inhalt %}
 <h1>Ersten Administrator anlegen</h1>
+{% if mit_code %}
 <p class="untertitel">Willkommen in der Netzwerkversion. Zum Schutz vor Unbefugten im Netz ist der
   <strong>Einrichtungscode</strong> nötig. Er steht im Protokoll des Containers
-  (<span class="mono">docker logs buchhaltung-kmu</span>) und in der Datei
-  <span class="mono">einrichtungscode.txt</span> im Datenordner.</p>
+  (<span class="mono">docker logs buchhaltung-kmu</span>) bzw. in der Datei
+  <span class="mono">einrichtungscode.txt</span> auf dem Server. Am Server-PC der Windows-Netzwerkversion
+  geht die Einrichtung ohne Code.</p>
+{% else %}
+<p class="untertitel">Willkommen in der Netzwerkversion. Legen Sie hier am Server-PC den ersten
+  <strong>Administrator</strong> an; danach unter „Benutzer“ die Konten für alle Mitarbeitenden.</p>
+{% endif %}
 <form method="post" action="{{ url_for('konto.einrichtung') }}" class="formular-spalte abstand-oben">
+  {% if mit_code %}
   <label class="feld"><span>Einrichtungscode <em>*</em></span>
     <input name="code" required autocomplete="off" placeholder="XXXX-XXXX-XXXX" value="{{ eingabe.get('code', '') }}"></label>
+  {% endif %}
   <label class="feld"><span>Anmeldename <em>*</em></span>
     <input name="name" required autocomplete="username" autocapitalize="none" value="{{ eingabe.get('name', '') }}"></label>
   <label class="feld"><span>Anzeigename</span>

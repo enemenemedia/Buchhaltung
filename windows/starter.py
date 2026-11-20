@@ -245,6 +245,20 @@ def main(argv: list[str]) -> int:
         return 1
     log = protokoll_einrichten(daten)
 
+    # Dieser Datenordner gehört einem laufenden Netzwerk-Server: nicht zusätzlich öffnen
+    for ordner in (daten, daten.parent):           # Netzwerkversion: Info liegt über dem Ordner „Daten“
+        try:
+            info = json.loads((ordner / "netzwerk-server.json").read_text(encoding="utf-8"))
+            from datetime import datetime
+            if abs((datetime.now() - datetime.fromisoformat(info["lebenszeichen"])).total_seconds()) < 120:
+                meldung(f"Diese Daten werden gerade vom Netzwerk-Server auf dem PC „{info.get('pc')}“ verwendet.\n\n"
+                        "Die Buchhaltung wird im Browser über den Server geöffnet.")
+                if not ohne_browser:
+                    webbrowser.open(info["url"])
+                return 0
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+
     port = laufende_instanz(daten)
     if port:
         log.info("Programm läuft bereits auf Port %s – öffne Browser", port)

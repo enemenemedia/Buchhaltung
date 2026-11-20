@@ -1,6 +1,6 @@
 """Buchhaltung für KMU – Flask-Anwendung (Kunden, Angebote, Rechnungen mit XRechnung, Belegerfassung, EÜR)."""
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 PROGRAMM_NAME = "Buchhaltung für KMU"
 
 import os
@@ -35,7 +35,11 @@ def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None, netz
     daten = Path(datenverzeichnis or os.environ.get("BUCHHALTUNG_DATEN") or os.environ.get("XRECHNUNG_DATEN")
                  or "daten").resolve()
     daten.mkdir(parents=True, exist_ok=True)
-    schluessel_datei = daten / ".secret_key"
+    # Sitzungsschlüssel; die Windows-Netzwerkversion legt ihn lokal auf dem Server-PC ab
+    # (SCHLUESSEL_ORDNER) statt auf dem Netzlaufwerk, das auch andere lesen können.
+    schluessel_ordner = Path((einstellungen or {}).get("SCHLUESSEL_ORDNER") or daten)
+    schluessel_ordner.mkdir(parents=True, exist_ok=True)
+    schluessel_datei = schluessel_ordner / ".secret_key"
     if not schluessel_datei.exists():
         schluessel_datei.write_text(secrets.token_hex(32), encoding="utf-8")
 
@@ -82,7 +86,7 @@ def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None, netz
         netz.einrichten(app)
 
     # Solange die Datenbank gesperrt ist, führt jede Seite zur Passworteingabe
-    FREI_GESPERRT = {"static", "kennung", "system_beenden", "einstellungen.entsperren"}
+    FREI_GESPERRT = {"static", "kennung", "system_beenden", "einstellungen.entsperren", "konto.stopp"}
 
     @app.before_request
     def _sperre():

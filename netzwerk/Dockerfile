@@ -1,8 +1,8 @@
 # Buchhaltung für KMU – Netzwerkversion (HTTPS-Server für das lokale Netz)
-# Bauen (im Hauptordner des Repositorys):  docker build -f netzwerk/Dockerfile -t buchhaltung-kmu:1.2.0 .
+# Bauen (im Hauptordner des Repositorys):  docker build -f netzwerk/Dockerfile -t buchhaltung-kmu:1.3.0 .
 FROM python:3.12-slim
 
-ARG VERSION=1.2.0
+ARG VERSION=1.3.0
 LABEL org.opencontainers.image.title="Buchhaltung für KMU (Netzwerkversion)" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.source="https://github.com/enemenemedia/Buchhaltung"

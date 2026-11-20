@@ -26,6 +26,7 @@ in der Belegerfassung und damit in der EÜR.
 | **Tags** für Belege, Auswertung und CSV nach Tags | ✅ fertig (1.1) |
 | Lizenzpflicht | vorerst abgeschaltet (1.1) – XRechnung ohne Lizenznummer |
 | **Netzwerkversion** (Docker, Benutzer und Rollen, HTTPS) | ✅ fertig (1.2) |
+| **Netzwerkversion für Windows** (Server-PC, Daten auf Netzlaufwerk, Arbeitsplätze im Browser) | ✅ fertig (1.3) |
 
 ## Netzwerkversion (Docker auf Linux-Server oder NAS)
 
@@ -45,14 +46,37 @@ mit mehreren Threads) mit selbst erzeugter Zertifizierungsstelle und Serverzerti
 | `werkzeuge/netzwerk_paket.py` | erzeugt `dist/Buchhaltung-fuer-KMU-Netzwerk-<Version>.zip` |
 
 ```sh
-docker build -f netzwerk/Dockerfile -t buchhaltung-kmu:1.2.0 .
-docker run -d -p 8443:8443 -v ./daten:/daten -e BUCHHALTUNG_HOSTNAMEN=nas,192.168.1.10 buchhaltung-kmu:1.2.0
+docker build -f netzwerk/Dockerfile -t buchhaltung-kmu:1.3.0 .
+docker run -d -p 8443:8443 -v ./daten:/daten -e BUCHHALTUNG_HOSTNAMEN=nas,192.168.1.10 buchhaltung-kmu:1.3.0
 docker logs <container>     # Einrichtungscode für den ersten Administrator
 ```
 
 Rechte: *Nur lesen* darf ausschließlich GET-Anfragen (ansehen, PDF/CSV); *Buchhaltung* alles außer
 Benutzerverwaltung, Einstellungen und dem Ändern der Stammdaten. Die Prüfung läuft zentral vor jeder
 Anfrage (`app/netzwerk/__init__.py`, `erlaubt()`).
+
+## Netzwerkversion für Windows (LAN, Daten auf einem Netzlaufwerk)
+
+Eigenes Setup `Buchhaltung-fuer-KMU-Netzwerk-Setup-<Version>.exe` (`windows/installer_netzwerk.nsi`,
+Starter `windows/netzwerk_starter.py`, Anleitung `windows/ANLEITUNG-NETZWERK.md`). Ein Setup, zwei
+Installationsarten:
+
+- **Server** (ein PC): startet die Anwendung im Netzwerkmodus (Anmeldung, Rollen, HTTPS über
+  cheroot, Port 8443) mit dem Datenordner `<Freigabe>\Buchhaltung für KMU\Daten`. Eine exklusiv
+  gesperrte Datei auf dem Netzlaufwerk verhindert einen zweiten Server; nur ein Prozess öffnet die
+  SQLite-Datenbank. Der Server legt `netzwerk-server.json` (Adresse, Lebenszeichen alle 30 s) und das
+  öffentliche CA-Zertifikat in `<Freigabe>\Buchhaltung für KMU` ab. Sitzungsschlüssel,
+  Zertifikatsschlüssel und Einrichtungscode bleiben lokal (`%LOCALAPPDATA%\Buchhaltung-KMU-Netzwerk`);
+  am Server-PC selbst (127.0.0.1) geht die Einrichtung des ersten Administrators ohne Code.
+- **Arbeitsplatz**: liest die Server-Adresse vom Netzlaufwerk, importiert das CA-Zertifikat einmalig in
+  den Zertifikatspeicher des Benutzers (`certutil -user`) und öffnet den Browser.
+
+Das Setup weist das Netzlaufwerk zu: UNC-Pfad prüfen, optional Zugangsdaten (`cmdkey`) und
+Laufwerksbuchstabe (`net use … /persistent:yes`), Schreibtest (Server). Dazu Autostart (Server) und eine
+Firewall-Regel nur für private/Domänen-Netze (einmalige UAC-Abfrage). Unbeaufsichtigt:
+`/S /MODUS=server|arbeitsplatz /FREIGABE=\\NAS\Buero [/LAUFWERK=N:] [/PORT=8443]`.
+
+Bauen: `python3 windows/bauen.py --variante netzwerk` (oder `alle` für Einzelplatz + Netzwerk).
 
 ## Installation unter Windows
 

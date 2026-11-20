@@ -22,7 +22,8 @@ from . import benutzer as bn
 bp = Blueprint("konto", __name__)
 
 # Ohne Anmeldung erreichbar
-FREI = {"static", "kennung", "einstellungen.entsperren", "konto.anmelden", "konto.einrichtung", "konto.zertifikat"}
+FREI = {"static", "kennung", "einstellungen.entsperren", "konto.anmelden", "konto.einrichtung", "konto.zertifikat",
+        "konto.stopp"}
 # Für jeden angemeldeten Benutzer, auch „Nur lesen“
 EIGENES_KONTO = {"konto.abmelden", "konto.passwort"}
 # Nur Administratoren (auch zum Ansehen)
@@ -86,7 +87,7 @@ def einrichtungscode(app: Flask) -> str:
     code = app.config.get("EINRICHTUNGSCODE")
     if code:
         return code
-    datei = Path(app.config["DATENVERZEICHNIS"]) / EINRICHTUNGSCODE_DATEI
+    datei = _codedatei(app)
     if datei.exists():
         code = datei.read_text(encoding="utf-8").strip()
     if not code:
@@ -104,7 +105,24 @@ def einrichtungscode(app: Flask) -> str:
 
 def _einrichtung_abschliessen(app: Flask) -> None:
     app.config["EINRICHTUNGSCODE"] = None
-    (Path(app.config["DATENVERZEICHNIS"]) / EINRICHTUNGSCODE_DATEI).unlink(missing_ok=True)
+    _codedatei(app).unlink(missing_ok=True)
+
+
+def _codedatei(app: Flask) -> Path:
+    # Windows-Server: lokal auf dem Server-PC statt auf dem Netzlaufwerk (das alle Mitarbeitenden lesen)
+    return Path(app.config.get("EINRICHTUNGSCODE_ORDNER") or app.config["DATENVERZEICHNIS"]) / EINRICHTUNGSCODE_DATEI
+
+
+def _ist_lokal() -> bool:
+    try:
+        return ipaddress.ip_address((request.remote_addr or "").split("%")[0]).is_loopback
+    except ValueError:
+        return False
+
+
+def code_noetig() -> bool:
+    """Am Server-PC selbst (Windows-Netzwerkversion) geht die Einrichtung ohne Code."""
+    return not (current_app.config.get("EINRICHTUNG_LOKAL_OHNE_CODE") and _ist_lokal())
 
 
 # ---------------------------------------------------------------------------
@@ -237,10 +255,11 @@ def einrichtung():
     if bn.anzahl(con) > 0:
         return redirect(url_for("konto.anmelden"))
     code = einrichtungscode(current_app)
+    mit_code = code_noetig()
     fehler = ""
     if request.method == "POST":
         eingabe = request.form.get("code", "").strip().upper().replace(" ", "")
-        if not secrets.compare_digest(eingabe, code):
+        if mit_code and not secrets.compare_digest(eingabe, code):
             fehler = "Der Einrichtungscode ist falsch. Er steht im Protokoll des Containers und in der Datei " \
                      f"{EINRICHTUNGSCODE_DATEI} im Datenordner."
         else:
@@ -255,8 +274,22 @@ def einrichtung():
                 _sitzung_starten(bn.laden(con, bid))
                 flash("Administrator angelegt – Sie sind angemeldet. Legen Sie unter „Benutzer“ weitere Konten an.", "ok")
                 return redirect(url_for("start"))
-    return render_template("konto/einrichtung.html", fehler=fehler, eingabe=request.form,
+    return render_template("konto/einrichtung.html", fehler=fehler, eingabe=request.form, mit_code=mit_code,
                            passwort_min=bn.PASSWORT_MIN), 400 if fehler else 200
+
+
+@bp.post("/system/stopp", endpoint="stopp")
+def server_stoppen():
+    """Beendet den Windows-Server (für Installer, Deinstallation und „Server beenden“).
+    Nur vom Server-PC selbst und nur mit dem Steuer-Kennwort aus dem lokalen Benutzerprofil."""
+    token = current_app.config.get("STEUER_TOKEN")
+    stopp = current_app.config.get("STEUER_STOPP")
+    if not token or stopp is None:
+        abort(404)
+    if not _ist_lokal() or not secrets.compare_digest(request.headers.get("X-Steuer-Token", ""), token):
+        abort(403)
+    stopp()
+    return "beendet"
 
 
 @bp.route("/konto/passwort", methods=["GET", "POST"])

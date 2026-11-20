@@ -10,10 +10,14 @@ Läuft unter Linux (getestet: Ubuntu 24.04) – kein Windows nötig:
 
 Voraussetzungen:  apt install nsis   ·   micromamba (wird bei Bedarf geladen)
 Aufruf:
-  python3 windows/bauen.py [--pruefung <Ordner mit Prüfartefakten>] [--ausgabe dist] [--variante frei|voll|test|beide]
+  python3 windows/bauen.py [--pruefung <Ordner mit Prüfartefakten>] [--ausgabe dist]
+                           [--variante frei|voll|test|beide|netzwerk|alle]
 
   Standard ist „frei“ (ohne Lizenzpflicht, siehe app/lizenz.LIZENZPFLICHT): ein Setup ohne Lizenzseite.
   „voll“, „test“ und „beide“ bauen die Varianten mit Lizenzprüfung.
+  „netzwerk“ baut die Windows-Netzwerkversion (Server/Arbeitsplatz, Daten auf einem Netzlaufwerk):
+  Buchhaltung-fuer-KMU-Netzwerk-Setup-<Version>.exe (windows/installer_netzwerk.nsi).
+  „alle“ baut „frei“ und „netzwerk“.
 
 Die Prüfartefakte erzeugt werkzeuge/pruefung_einrichten.py. Ohne --pruefung wird der
 Installer ohne eingebaute XRechnung-Prüfung gebaut (die Erzeugung funktioniert trotzdem).
@@ -41,7 +45,7 @@ CONDA = "https://conda.anaconda.org/conda-forge"
 
 # Laufzeit-Pakete (requirements.txt ohne Testwerkzeuge) + Server + Prüfung
 PAKETE_PRUEFUNG = ["lxml>=5.0", "saxonche>=12.5"]
-PAKETE_EXTRA = ["waitress>=3.0"]
+PAKETE_EXTRA = ["waitress>=3.0", "cheroot>=10.0"]   # cheroot: HTTPS-Server der Netzwerkversion
 
 # Was aus der Python-Umgebung nicht gebraucht wird
 ENTFERNEN = [
@@ -159,11 +163,11 @@ def main() -> int:
     p.add_argument("--pruefung", help="Ordner mit den Prüfartefakten (siehe werkzeuge/pruefung_einrichten.py)")
     p.add_argument("--ausgabe", default=str(REPO / "dist"))
     p.add_argument("--arbeit", default=str(REPO / "build" / "windows"))
-    p.add_argument("--variante", choices=("frei", "voll", "test", "beide"), default="frei")
+    p.add_argument("--variante", choices=("frei", "voll", "test", "beide", "netzwerk", "alle"), default="frei")
     a = p.parse_args()
     sys.path.insert(0, str(REPO))
     from app import lizenz
-    if a.variante == "frei" and lizenz.LIZENZPFLICHT:
+    if a.variante in ("frei", "netzwerk", "alle") and lizenz.LIZENZPFLICHT:
         print("app/lizenz.py: LIZENZPFLICHT ist eingeschaltet – bitte --variante voll|test|beide bauen.")
         return 1
     if a.variante in ("voll", "beide") and not lizenz.OEFFENTLICHER_SCHLUESSEL:
@@ -190,6 +194,7 @@ def main() -> int:
     shutil.copytree(REPO / "werkzeuge", programm / "werkzeuge",
                     ignore=shutil.ignore_patterns("__pycache__", "lizenz_erzeugen.py"))
     shutil.copy(WINDOWS / "starter.py", inhalt / "starter.py")
+    shutil.copy(WINDOWS / "netzwerk_starter.py", inhalt / "netzwerk_starter.py")
     symbol(inhalt / "buchhaltung.ico")
     lizenztext(arbeit / "lizenz.txt")
     if a.pruefung:
@@ -207,15 +212,18 @@ def main() -> int:
     ausgabe = Path(a.ausgabe).resolve()
     ausgabe.mkdir(parents=True, exist_ok=True)
     groesse_kb = sum(f.stat().st_size for f in inhalt.rglob("*") if f.is_file()) // 1024
-    varianten = {"voll": [("", f"Buchhaltung-fuer-KMU-Setup-{v}.exe")],
-                 "test": [("-DTESTVERSION", f"Buchhaltung-fuer-KMU-Testversion-Setup-{v}.exe")]}
+    einzel, netz = WINDOWS / "installer.nsi", WINDOWS / "installer_netzwerk.nsi"
+    varianten = {"voll": [(einzel, "", f"Buchhaltung-fuer-KMU-Setup-{v}.exe")],
+                 "test": [(einzel, "-DTESTVERSION", f"Buchhaltung-fuer-KMU-Testversion-Setup-{v}.exe")],
+                 "frei": [(einzel, "-DOHNE_LIZENZ", f"Buchhaltung-fuer-KMU-Setup-{v}.exe")],
+                 "netzwerk": [(netz, "", f"Buchhaltung-fuer-KMU-Netzwerk-Setup-{v}.exe")]}
     varianten["beide"] = varianten["voll"] + varianten["test"]
-    varianten["frei"] = [("-DOHNE_LIZENZ", f"Buchhaltung-fuer-KMU-Setup-{v}.exe")]
+    varianten["alle"] = varianten["frei"] + varianten["netzwerk"]
     print()
-    for schalter, name in varianten[a.variante]:
+    for skript, schalter, name in varianten[a.variante]:
         subprocess.run(["makensis", "-V2", f"-DVERSION={v}", f"-DINHALT={inhalt}", f"-DAUSGABE={ausgabe}",
                         f"-DLIZENZ={arbeit / 'lizenz.txt'}", f"-DGROESSE_KB={groesse_kb}",
-                        *([schalter] if schalter else []), str(WINDOWS / "installer.nsi")], check=True)
+                        *([schalter] if schalter else []), str(skript)], check=True)
         datei = ausgabe / name
         print(f"Fertig: {datei}  ({datei.stat().st_size / 1_048_576:.1f} MB, entpackt {groesse_kb / 1024:.0f} MB)")
     return 0
