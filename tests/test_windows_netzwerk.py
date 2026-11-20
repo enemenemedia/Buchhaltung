@@ -47,7 +47,7 @@ def anfrage(url, ca, daten=None, kopf=None):
     ctx = ssl.create_default_context(cafile=str(ca))
     r = urllib.request.Request(url, data=daten, headers=kopf or {}, method="POST" if daten is not None else "GET")
     try:
-        with urllib.request.urlopen(r, context=ctx, timeout=5) as a:
+        with urllib.request.urlopen(r, context=ctx, timeout=20) as a:
             return a.status, a.read().decode()
     except urllib.error.HTTPError as e:
         return e.code, e.read().decode()
@@ -76,10 +76,11 @@ def test_server_auf_netzlaufwerk(ns, tmp_path):
     assert app is not None
     t = threading.Thread(target=s.laufen, args=(app,), daemon=True)
     t.start()
-    for _ in range(50):
+    for _ in range(300):                                       # bis 30 s (langsame CI-Rechner)
         if ns.kennung(s.port):
             break
         time.sleep(0.1)
+    assert ns.kennung(s.port), "Server ist nicht gestartet"
     ca = basis / ns.CA_DATEI                                  # öffentliches CA-Zertifikat auf der Freigabe
     assert ca.read_bytes() == (ns.LOKAL / "zertifikat" / "ca.crt").read_bytes()
     assert (daten / "xrechnung.db").exists()                  # Daten im Unterordner
