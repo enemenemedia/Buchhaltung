@@ -66,6 +66,7 @@ def test_einstellungen_und_datenordner(ns, tmp_path):
 
 
 def test_server_auf_netzlaufwerk(ns, tmp_path):
+    pytest.importorskip("cheroot")
     basis = tmp_path / "freigabe" / "Buchhaltung für KMU"
     daten = basis / "Daten"
     daten.mkdir(parents=True)
