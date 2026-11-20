@@ -1,7 +1,10 @@
 MITGELIEFERTE KOMPONENTEN VON DRITTANBIETERN
 
-Dieses Installationspaket enthält die folgenden Komponenten. Sie stehen unter
-ihren eigenen Lizenzen; die Lizenztexte liegen jeweils im Installationsordner
+Buchhaltung für KMU selbst: © 2026 Ene Mene Media. Es steht unter keiner
+Open-Source-Lizenz.
+
+Dieses Installationspaket enthält außerdem die folgenden Komponenten. Sie stehen
+unter ihren eigenen Lizenzen; die Lizenztexte liegen jeweils im Installationsordner
 (python\LICENSE_PYTHON.txt bzw. python\Lib\site-packages\<Paket>.dist-info\).
 
 Laufzeit
@@ -13,6 +16,10 @@ Python-Pakete
   Flask, Werkzeug, Jinja2, MarkupSafe,
   itsdangerous, click, blinker ............... BSD-3-Clause
   waitress ................................... Zope Public License 2.1
+  cheroot (Netzwerkversion), jaraco.functools,
+  more-itertools ............................. BSD-3-Clause bzw. MIT
+  pyzipper (Datensicherung) .................. MIT
+  pycryptodomex (Datensicherung) ............. BSD-2-Clause / Public Domain
   Pillow ..................................... MIT-CMU (HPND)
   openpyxl, et_xmlfile ....................... MIT
   reportlab .................................. BSD

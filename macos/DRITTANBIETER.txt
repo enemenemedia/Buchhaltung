@@ -1,6 +1,9 @@
 MITGELIEFERTE KOMPONENTEN VON DRITTANBIETERN
 
-Dieses Programmpaket enthält die folgenden Komponenten. Sie stehen unter
+Buchhaltung für KMU selbst: © 2026 Ene Mene Media. Es steht unter keiner
+Open-Source-Lizenz.
+
+Dieses Programmpaket enthält außerdem die folgenden Komponenten. Sie stehen unter
 ihren eigenen Lizenzen; die Lizenztexte liegen jeweils im App-Bundle
 (Contents/Resources/python-*/lib/python3.12/LICENSE.txt bzw.
 …/site-packages/<Paket>.dist-info/).
@@ -14,6 +17,7 @@ Python-Pakete
   itsdangerous, click, blinker ............... BSD-3-Clause
   waitress ................................... Zope Public License 2.1
   Pillow ..................................... MIT-CMU (HPND)
+  pyzipper, pycryptodomex (Datensicherung) ... MIT bzw. BSD-2-Clause / Public Domain
   openpyxl, et_xmlfile ....................... MIT
   reportlab .................................. BSD
   lxml ....................................... BSD-3-Clause

@@ -1,6 +1,6 @@
 ; Installer für „Buchhaltung für KMU“ (NSIS 3, Unicode)
 ; Gebaut von windows/bauen.py – Aufruf von Hand:
-;   makensis -DVERSION=1.0.0 -DINHALT=<inhalt> -DAUSGABE=<dist> -DLIZENZ=<lizenz.txt> -DGROESSE_KB=<kb> [-DTESTVERSION] installer.nsi
+;   makensis -DVERSION=1.0.0 -DINHALT=<inhalt> -DAUSGABE=<dist> -DGROESSE_KB=<kb> [-DTESTVERSION] installer.nsi
 ;
 ; Zwei Varianten aus demselben Skript:
 ; - Vollversion: installiert nur mit gültiger Lizenznummer. Die Nummer wird nach dem Entpacken
@@ -55,7 +55,7 @@ VIAddVersionKey /LANG=1031 "ProductVersion" "${VERSION}"
 VIAddVersionKey /LANG=1031 "FileVersion" "${VERSION}"
 VIAddVersionKey /LANG=1031 "FileDescription" "Installation von ${NAME}"
 VIAddVersionKey /LANG=1031 "CompanyName" "${FIRMA}"
-VIAddVersionKey /LANG=1031 "LegalCopyright" "MIT-Lizenz"
+VIAddVersionKey /LANG=1031 "LegalCopyright" "© 2026 ${FIRMA}"
 
 Var DATEN
 Var DATENHINWEIS
@@ -85,7 +85,6 @@ Var FeldNummer
 !define MUI_WELCOMEPAGE_TEXT "Dieser Assistent installiert ${NAME} – Kunden, Angebote und Rechnungen mit XRechnung und PDF, Belegerfassung und Einnahmen-Überschuss-Rechnung (EÜR).$\r$\n$\r$\nFür die Installation benötigen Sie Ihre Lizenznummer. Die Installation benötigt keine Administratorrechte. Python und alle benötigten Komponenten sind enthalten.$\r$\n$\r$\nKlicken Sie auf „Weiter“, um fortzufahren."
 !endif
 !insertmacro MUI_PAGE_WELCOME
-!insertmacro MUI_PAGE_LICENSE "${LIZENZ}"
 
 !define MUI_PAGE_HEADER_TEXT "Programmordner"
 !define MUI_PAGE_HEADER_SUBTEXT "Wohin soll das Programm installiert werden?"

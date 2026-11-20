@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block titel %}Datensicherung – {{ PROGRAMM_NAME }}{% endblock %}
+{% block inhalt %}
+<div class="seitenkopf">
+  <div>
+    <h1>Datensicherung</h1>
+    <p class="untertitel">Sichert alle Daten und Dokumente – Datenbank, Belege, Rechnungen, Angebote – in eine ZIP-Datei.
+      Am besten auf einen USB-Stick, eine externe Festplatte oder ein Netzlaufwerk.</p>
+  </div>
+</div>
+
+{% if fehler %}<div class="meldung meldung-fehler" role="alert">{{ fehler }}</div>{% endif %}
+
+<div class="kennzahlen kennzahlen-3">
+  <div><strong>{% if letzte %}{{ letzte.zeitpunkt|datum(true) }}{% else %}noch nie{% endif %}</strong>
+    <span>Letzte Sicherung{% if letzte and letzte.tage is not none %} ({% if letzte.tage == 0 %}heute{% elif letzte.tage == 1 %}gestern{% else %}vor {{ letzte.tage }} Tagen{% endif %}){% endif %}</span></div>
+  <div><strong>{{ anzahl }}</strong><span>Dateien</span></div>
+  <div><strong>{{ groesse(umfang) }}</strong><span>Umfang (vor dem Packen)</span></div>
+</div>
+{% if SICHERUNG_FAELLIG %}
+<div class="meldung meldung-warnung">{% if letzte %}Die letzte Sicherung ist über 30 Tage alt.{% else %}Es gibt noch keine Datensicherung.{% endif %}
+  Bitte jetzt sichern – Buchungsbelege müssen 10 Jahre aufbewahrt werden.</div>
+{% endif %}
+{% if letzte %}
+<p class="gedimmt klein">Zuletzt: {{ letzte.datei }} → {{ letzte.ziel }}{% if letzte.verschluesselt %} · mit Passwort{% endif %}{% if letzte.benutzer %} · von {{ letzte.benutzer }}{% endif %}</p>
+{% endif %}
+
+<form method="post" class="karte" id="sicherung-formular">
+  <h2>1. Passwort (optional)</h2>
+  <div class="sicherung-raster">
+    <label class="feld"><span>Passwort für die Sicherung</span>
+      <input type="password" name="passwort" minlength="{{ passwort_min }}" autocomplete="new-password">
+      <small>leer lassen = ohne Passwort · mindestens {{ passwort_min }} Zeichen</small></label>
+    <label class="feld"><span>Passwort wiederholen</span>
+      <input type="password" name="wiederholung" autocomplete="new-password"></label>
+  </div>
+  <p class="gedimmt klein">Mit Passwort wird die ZIP-Datei mit AES-256 verschlüsselt. Zum Öffnen braucht man 7-Zip, WinRAR
+    oder WinZip – der in Windows eingebaute ZIP-Ordner kann solche Dateien nicht öffnen. <strong>Ohne das Passwort ist die
+    Sicherung wertlos</strong> – bitte sicher aufbewahren.</p>
+
+  {% if laufwerke_erlaubt %}
+  <h2 class="abstand-oben">2. Ziel{% if NETZWERK %} auf dem Server-PC{% endif %}</h2>
+  {% if laufwerke %}
+  <div class="laufwerksliste" role="radiogroup" aria-label="Laufwerk">
+    {% for l in laufwerke %}
+    <label class="laufwerk">
+      <input type="radio" name="laufwerk" value="{{ l.pfad }}" {% if vorschlag.laufwerk == l.pfad %}checked{% endif %}>
+      <span><strong>{{ l.pfad }} {{ l.name }}</strong><span class="gedimmt klein">{{ l.art }} · {{ groesse(l.frei) }} frei</span></span>
+    </label>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <div class="sicherung-raster">
+    <label class="feld"><span>Unterordner auf dem Laufwerk</span>
+      <input name="ordner" value="{{ vorschlag.ordner }}"></label>
+    <label class="feld"><span>… oder vollständiger Pfad</span>
+      <input name="pfad" value="{{ vorschlag.pfad }}" placeholder="z. B. E:\Sicherung oder \\NAS\Sicherung" spellcheck="false">
+      <small>hat Vorrang vor der Auswahl oben</small></label>
+  </div>
+  <div class="knopfgruppe abstand-oben">
+    <button class="knopf knopf-primaer" formaction="{{ url_for('sicherung.erstellen') }}">💾 Sicherung auf Laufwerk speichern</button>
+    <button class="knopf" formaction="{{ url_for('sicherung.download') }}">Als Datei herunterladen</button>
+  </div>
+  {% else %}
+  <h2 class="abstand-oben">2. Herunterladen</h2>
+  <p>Die Sicherung wird im Browser heruntergeladen; speichern Sie sie anschließend auf einem Laufwerk Ihrer Wahl.</p>
+  <button class="knopf knopf-primaer" formaction="{{ url_for('sicherung.download') }}">💾 Sicherung herunterladen</button>
+  {% endif %}
+  <p class="gedimmt klein abstand-oben">Die Sicherung entsteht zunächst als Zwischendatei, wird danach vollständig zurückgelesen
+    und geprüft und erst dann umbenannt. Während die Datenbank kopiert wird, warten Änderungen anderer Benutzer kurz.
+    {% if NETZWERK %}„Herunterladen“ speichert die Datei auf <em>diesem</em> PC (Download-Ordner bzw. Speicherort des Browsers).{% endif %}</p>
+</form>
+
+<section class="karte">
+  <h2>Wiederherstellen</h2>
+  <p>Jede Sicherung enthält eine <span class="mono">LIESMICH.txt</span> mit der Anleitung: Programm beenden, den bisherigen
+    Datenordner umbenennen und den Inhalt der ZIP-Datei in einen neuen Ordner mit dem bisherigen Namen entpacken.
+    {% if not NETZWERK %}Datenordner: <span class="mono">{{ daten }}</span>{% endif %}</p>
+</section>
+{% endblock %}

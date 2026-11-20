@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "_protokoll.html" import protokoll_liste %}
 {% set BEREICHE = {'kunde': 'Kunde', 'stammdaten': 'Stammdaten', 'leistung': 'Leistung', 'angebot': 'Angebot',
-                   'rechnung': 'Rechnung', 'beleg': 'Beleg', 'tag': 'Tag', 'benutzer': 'Benutzer'} %}
+                   'rechnung': 'Rechnung', 'beleg': 'Beleg', 'tag': 'Tag', 'benutzer': 'Benutzer', 'sicherung': 'Datensicherung'} %}
 {% block titel %}Änderungsprotokoll – {{ PROGRAMM_NAME }}{% endblock %}
 {% block inhalt %}
 <nav class="brotkrumen"><a href="{{ url_for('konto.benutzer_liste') }}">Benutzer</a> › Änderungsprotokoll</nav>

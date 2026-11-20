@@ -272,7 +272,7 @@ def info_plist(v: str) -> dict:
         # Kein eigenes Fenster: Die Oberfläche läuft im Browser, beendet wird über „Beenden“
         "LSUIElement": True,
         "NSHighResolutionCapable": True,
-        "NSHumanReadableCopyright": "© Ene Mene Media – MIT-Lizenz",
+        "NSHumanReadableCopyright": "© 2026 Ene Mene Media",
     }
 
 
@@ -373,8 +373,8 @@ def main() -> int:
     shutil.copytree(REPO / "werkzeuge", inhalt / "programm" / "werkzeuge",
                     ignore=shutil.ignore_patterns("__pycache__", "lizenz_erzeugen.py"))
     windows.symbol_bild(1024).save(inhalt / "buchhaltung.icns")
-    lizenz_text = (REPO / "LICENSE").read_text(encoding="utf-8") + "\n" + "-" * 70 + "\n" + \
-        (MACOS / "DRITTANBIETER.txt").read_text(encoding="utf-8")
+    # Lizenzhinweise der mitgelieferten Fremdsoftware (das Programm selbst: keine Open-Source-Lizenz)
+    lizenz_text = (MACOS / "DRITTANBIETER.txt").read_text(encoding="utf-8")
 
     ausgabe = Path(a.ausgabe).resolve()
     ausgabe.mkdir(parents=True, exist_ok=True)
@@ -395,7 +395,7 @@ def main() -> int:
                    "  erstellt. Eine Lizenznummer können Sie im Programm unter „Einstellungen“ eingeben.")
         datei = ausgabe / VARIANTEN[variante].format(v=v)
         datei.unlink(missing_ok=True)
-        zip_schreiben(app, datei, {"LIESMICH.txt": liesmich, "LIZENZEN.txt": lizenz_text})
+        zip_schreiben(app, datei, {"LIESMICH.txt": liesmich, "DRITTANBIETER.txt": lizenz_text})
         groesse = sum(f.stat().st_size for f in app.rglob("*") if f.is_file() and not f.is_symlink())
         print(f"Fertig: {datei}  ({datei.stat().st_size / 1_048_576:.1f} MB, entpackt {groesse / 1_048_576:.0f} MB)")
     return 0

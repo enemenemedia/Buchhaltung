@@ -1,8 +1,8 @@
 # Buchhaltung für KMU – Netzwerkversion (HTTPS-Server für das lokale Netz)
-# Bauen (im Hauptordner des Repositorys):  docker build -f netzwerk/Dockerfile -t buchhaltung-kmu:1.3.0 .
+# Bauen (im Hauptordner des Repositorys):  docker build -f netzwerk/Dockerfile -t buchhaltung-kmu:1.4.0 .
 FROM python:3.12-slim
 
-ARG VERSION=1.3.0
+ARG VERSION=1.4.0
 LABEL org.opencontainers.image.title="Buchhaltung für KMU (Netzwerkversion)" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.source="https://github.com/enemenemedia/Buchhaltung"
@@ -25,7 +25,6 @@ WORKDIR /programm
 COPY requirements-netzwerk.txt .
 RUN pip install --no-cache-dir -r requirements-netzwerk.txt
 COPY app ./app
-COPY LICENSE ./
 COPY netzwerk/entrypoint.sh /usr/local/bin/buchhaltung-start
 RUN chmod 755 /usr/local/bin/buchhaltung-start && mkdir -p /daten \
  && python -m compileall -q app

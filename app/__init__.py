@@ -1,6 +1,6 @@
 """Buchhaltung für KMU – Flask-Anwendung (Kunden, Angebote, Rechnungen mit XRechnung, Belegerfassung, EÜR)."""
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 PROGRAMM_NAME = "Buchhaltung für KMU"
 
 import os
@@ -70,9 +70,11 @@ def create_app(datenverzeichnis: str | Path | None = None, *, beenden=None, netz
     from .kunden import bp as kunden_bp
     from .leistungen import bp as leistungen_bp
     from .rechnungen import bp as rechnungen_bp
+    from .sicherung import bp as sicherung_bp
     from .stammdaten import bp as stammdaten_bp
     app.register_blueprint(kunden_bp)
     app.register_blueprint(stammdaten_bp)
+    app.register_blueprint(sicherung_bp)
     app.register_blueprint(leistungen_bp)
     app.register_blueprint(angebote_bp)
     app.register_blueprint(rechnungen_bp)

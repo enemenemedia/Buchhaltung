@@ -151,11 +151,11 @@ def symbol(ziel: Path) -> None:
     symbol_bild(256).save(ziel, sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
 
 
-def lizenztext(ziel: Path) -> None:
-    teile = [(REPO / "LICENSE").read_text(encoding="utf-8"), "", "-" * 70,
-             (WINDOWS / "DRITTANBIETER.txt").read_text(encoding="utf-8")]
-    # NSIS zeigt den Lizenztext am zuverlässigsten mit Windows-Zeilenenden an
-    ziel.write_text("\r\n".join("\n".join(teile).splitlines()), encoding="utf-8-sig")
+def drittanbieter(ziel: Path) -> None:
+    """Lizenzhinweise der mitgelieferten Fremdsoftware (Python und Pakete) – liegt im Programmordner.
+    Das Programm selbst steht seit 1.4.0 unter keiner Open-Source-Lizenz mehr; das Setup hat keine Lizenzseite."""
+    text = (WINDOWS / "DRITTANBIETER.txt").read_text(encoding="utf-8")
+    ziel.write_text("\r\n".join(text.splitlines()) + "\r\n", encoding="utf-8-sig")
 
 
 def main() -> int:
@@ -196,7 +196,7 @@ def main() -> int:
     shutil.copy(WINDOWS / "starter.py", inhalt / "starter.py")
     shutil.copy(WINDOWS / "netzwerk_starter.py", inhalt / "netzwerk_starter.py")
     symbol(inhalt / "buchhaltung.ico")
-    lizenztext(arbeit / "lizenz.txt")
+    drittanbieter(programm / "DRITTANBIETER.txt")
     if a.pruefung:
         schritt("Regelwerke der XRechnung-Prüfung")
         pruefung = Path(a.pruefung)
@@ -222,7 +222,7 @@ def main() -> int:
     print()
     for skript, schalter, name in varianten[a.variante]:
         subprocess.run(["makensis", "-V2", f"-DVERSION={v}", f"-DINHALT={inhalt}", f"-DAUSGABE={ausgabe}",
-                        f"-DLIZENZ={arbeit / 'lizenz.txt'}", f"-DGROESSE_KB={groesse_kb}",
+                        f"-DGROESSE_KB={groesse_kb}",
                         *([schalter] if schalter else []), str(skript)], check=True)
         datei = ausgabe / name
         print(f"Fertig: {datei}  ({datei.stat().st_size / 1_048_576:.1f} MB, entpackt {groesse_kb / 1024:.0f} MB)")

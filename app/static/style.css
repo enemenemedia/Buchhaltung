@@ -445,8 +445,8 @@ th .tag-zeilenform .rechts { text-align: right; }
 /* Netzwerkversion: Konto, Benutzer */
 .benutzer-knopf { color: #e6f0ec; text-decoration: none; font-size: .9rem; padding: 5px 8px; border-radius: 6px;
   white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
-.kopf-innen.mit-konto { max-width: 1280px; gap: 20px; }
-.kopf-innen.mit-konto .hauptnav a { padding: 6px 9px; }
+.kopf-innen, .kopf-innen.mit-konto { max-width: 1280px; gap: 20px; }
+.kopf-innen .hauptnav a { padding: 6px 9px; }
 .benutzer-knopf:hover { background: rgba(255,255,255,.12); }
 .benutzer-raster { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; align-items: end; }
 .benutzer-zeile { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -454,3 +454,20 @@ th .tag-zeilenform .rechts { text-align: right; }
 .benutzer-zeile input[name="anzeigename"] { flex: 1 1 150px; width: auto; }
 .benutzer-zeile input[name="passwort"] { flex: 1 1 170px; width: auto; }
 .rollenliste { margin: 0; padding-left: 1.2rem; line-height: 1.7; }
+
+/* Datensicherung */
+.sicherung-knopf { text-decoration: none; display: inline-block; white-space: nowrap; }
+.sicherung-knopf.faellig { border-color: #f2c66d; color: #ffe2a6; }
+.sicherung-knopf.faellig::after { content: " !"; font-weight: 700; }
+.laufwerksliste { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; margin: 6px 0 12px; }
+.laufwerk { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--linie); border-radius: 8px;
+  padding: 10px 12px; cursor: pointer; background: var(--flaeche); }
+.laufwerk:has(input:checked) { border-color: var(--akzent); box-shadow: 0 0 0 2px rgba(31,111,92,.15); background: var(--akzent-hell); }
+.laufwerk input { margin-top: 3px; width: auto; flex: none; }
+.laufwerk strong { display: block; }
+.sicherung-raster { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 700px) { .sicherung-raster { grid-template-columns: 1fr; } }
+.meldung-warnung { background: var(--warn-hell); border-color: #f2d48f; color: #6b4b00; }
+/* Netzwerkversion: mehr Knöpfe im Kopf – Zusatz „für KMU“ ausblenden, Benutzername kürzen */
+.kopf-innen.mit-konto .marke span { display: none; }
+.kopf-innen.mit-konto .benutzer-knopf { max-width: 110px; }

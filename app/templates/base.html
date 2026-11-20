@@ -33,6 +33,10 @@
           <button type="submit" class="beenden-knopf">Abmelden</button>
         </form>
         {% endif %}
+        {% if not NETZWERK or IST_ADMIN %}
+        <a href="{{ url_for('sicherung.seite') }}" class="beenden-knopf sicherung-knopf{% if SICHERUNG_FAELLIG %} faellig{% endif %}"
+           title="Datensicherung – {% if SICHERUNG_LETZTE %}letzte: {{ SICHERUNG_LETZTE.zeitpunkt|datum(true) }}{% else %}noch keine{% endif %}">💾 Sichern</a>
+        {% endif %}
         {% if VERSCHLUESSELT and (not NETZWERK or IST_ADMIN) %}
         <form method="post" action="{{ url_for('einstellungen.sperren') }}">
           <button type="submit" class="beenden-knopf" title="Datenbank sperren – zum Weiterarbeiten ist das Passwort nötig">🔒 Sperren</button>

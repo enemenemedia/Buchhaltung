@@ -27,7 +27,7 @@ FREI = {"static", "kennung", "einstellungen.entsperren", "konto.anmelden", "kont
 # Für jeden angemeldeten Benutzer, auch „Nur lesen“
 EIGENES_KONTO = {"konto.abmelden", "konto.passwort"}
 # Nur Administratoren (auch zum Ansehen)
-NUR_ADMIN = ("/benutzer", "/einstellungen")
+NUR_ADMIN = ("/benutzer", "/einstellungen", "/sicherung")
 # Nur Administratoren dürfen hier ändern; ansehen dürfen alle
 AENDERN_NUR_ADMIN = ("/stammdaten",)
 EINRICHTUNGSCODE_DATEI = "einrichtungscode.txt"

@@ -27,6 +27,25 @@ in der Belegerfassung und damit in der EÜR.
 | Lizenzpflicht | vorerst abgeschaltet (1.1) – XRechnung ohne Lizenznummer |
 | **Netzwerkversion** (Docker, Benutzer und Rollen, HTTPS) | ✅ fertig (1.2) |
 | **Netzwerkversion für Windows** (Server-PC, Daten auf Netzlaufwerk, Arbeitsplätze im Browser) | ✅ fertig (1.3) |
+| **Datensicherung** (Knopf oben rechts, beliebiges Laufwerk oder Download, optional AES-256-Passwort) | ✅ fertig (1.4) |
+
+## Datensicherung
+
+Knopf **💾 Datensicherung** oben rechts (Netzwerkversion: nur Administratoren) → `app/sicherung/`.
+
+- Inhalt: der ganze Datenordner – Datenbank als konsistenter Stand (Lesetransaktion während der
+  Kopie, auch für die SQLCipher-verschlüsselte Datenbank) und alle Dokumente (Belege, Rechnungs-PDF/-XML,
+  Angebote, Logos). Dazu `sicherung.json` (Version, Zeitpunkt, alle Dateien mit SHA-256) und
+  `LIESMICH.txt` (Wiederherstellen). Nicht enthalten: Sitzungsschlüssel, Sperr-/Zwischendateien,
+  Startprotokolle, Einrichtungscode.
+- Ziel: ein beliebiges Laufwerk (Liste aller Laufwerke mit freiem Platz, Unterordner oder eigener Pfad,
+  auch `\\NAS\Freigabe`) oder als Download im Browser. Ein Ziel im Datenordner selbst wird abgelehnt.
+  Windows-Netzwerkversion: Laufwerke des Server-PCs; Docker: nur Download.
+- Optional mit Passwort: ZIP mit AES-256 (WinZip-AES, `pyzipper`) – zu öffnen mit 7-Zip, WinRAR,
+  WinZip; ohne Passwort eine normale ZIP-Datei.
+- Die Datei entsteht als `.teil`, wird vollständig zurückgelesen und geprüft (CRC/AES, Abgleich mit
+  `sicherung.json`) und erst dann umbenannt. Jede Sicherung steht im Änderungsprotokoll; ist die letzte
+  älter als 30 Tage, wird der Knopf hervorgehoben.
 
 ## Netzwerkversion (Docker auf Linux-Server oder NAS)
 
@@ -483,3 +502,10 @@ python -m pytest
 
 Mit gesetztem `XRECHNUNG_ARTEFAKTE` werden zusätzlich alle in den Tests erzeugten XRechnungen
 gegen die offiziellen Regeln geprüft.
+
+## Rechtliches
+
+© 2026 Ene Mene Media. Seit Version 1.4.0 steht „Buchhaltung für KMU“ unter **keiner Open-Source-Lizenz**
+mehr (die MIT-Lizenz wurde entfernt); die Setups haben keine Lizenzseite. Bereits unter der MIT-Lizenz
+veröffentlichte Stände bis 1.3.0 bleiben unter dieser Lizenz. Die Lizenzhinweise der mitgelieferten
+Fremdsoftware stehen in `windows/DRITTANBIETER.txt` bzw. `macos/DRITTANBIETER.txt` und im Programmordner.

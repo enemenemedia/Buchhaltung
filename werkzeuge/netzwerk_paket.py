@@ -27,7 +27,7 @@ def _dateien():
     for p in sorted((WURZEL / "app").rglob("*")):
         if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc":
             yield p, p.relative_to(WURZEL).as_posix()
-    for name in ("netzwerk/Dockerfile", "netzwerk/entrypoint.sh", "requirements-netzwerk.txt", "LICENSE"):
+    for name in ("netzwerk/Dockerfile", "netzwerk/entrypoint.sh", "requirements-netzwerk.txt"):
         yield WURZEL / name, name
 
 

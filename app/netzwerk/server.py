@@ -37,7 +37,8 @@ def main() -> None:  # pragma: no cover – wird im Container ausgeführt
     from gunicorn.app.base import BaseApplication
 
     daten, cert, key, ca = _konfiguration()
-    app = create_app(daten, netzwerk=True, einstellungen={"ZERTIFIKAT_CA": ca})
+    # im Container gibt es keine Laufwerke des Benutzers: Sicherung nur als Download
+    app = create_app(daten, netzwerk=True, einstellungen={"ZERTIFIKAT_CA": ca, "SICHERUNG_LAUFWERKE": False})
     port = int(os.environ.get("BUCHHALTUNG_PORT", "8443"))
     optionen = {
         "bind": [f"0.0.0.0:{port}", f"[::]:{port}"] if os.environ.get("BUCHHALTUNG_IPV6") == "1" else [f"0.0.0.0:{port}"],

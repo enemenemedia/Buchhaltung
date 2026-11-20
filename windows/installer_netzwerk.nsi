@@ -1,6 +1,6 @@
 ; Installer der Windows-Netzwerkversion von „Buchhaltung für KMU“ (NSIS 3, Unicode)
 ; Gebaut von windows/bauen.py --variante netzwerk – Aufruf von Hand:
-;   makensis -DVERSION=1.3.0 -DINHALT=<inhalt> -DAUSGABE=<dist> -DLIZENZ=<lizenz.txt> -DGROESSE_KB=<kb> installer_netzwerk.nsi
+;   makensis -DVERSION=1.3.0 -DINHALT=<inhalt> -DAUSGABE=<dist> -DGROESSE_KB=<kb> installer_netzwerk.nsi
 ;
 ; Zwei Installationsarten aus einem Setup:
 ; - Server:       Dieser PC stellt die Buchhaltung im LAN bereit (HTTPS, Anmeldung mit Benutzern
@@ -47,7 +47,7 @@ VIAddVersionKey /LANG=1031 "ProductVersion" "${VERSION}"
 VIAddVersionKey /LANG=1031 "FileVersion" "${VERSION}"
 VIAddVersionKey /LANG=1031 "FileDescription" "Installation von ${TITEL}"
 VIAddVersionKey /LANG=1031 "CompanyName" "${FIRMA}"
-VIAddVersionKey /LANG=1031 "LegalCopyright" "MIT-Lizenz"
+VIAddVersionKey /LANG=1031 "LegalCopyright" "© 2026 ${FIRMA}"
 
 Var Modus          ; server | arbeitsplatz
 Var Freigabe       ; \\SERVER\Freigabe
@@ -85,7 +85,6 @@ Var KnopfFirewall
 !define MUI_WELCOMEPAGE_TITLE "Willkommen bei ${TITEL} ${VERSION}"
 !define MUI_WELCOMEPAGE_TEXT "Mit der Netzwerkversion arbeiten mehrere PCs im Büro mit derselben Buchhaltung. Alle Daten liegen auf einem Netzlaufwerk.$\r$\n$\r$\n• Ein PC ist der Server: Er stellt die Buchhaltung im lokalen Netz bereit (verschlüsselt per HTTPS, Anmeldung mit Benutzern und Rollen).$\r$\n• Alle anderen PCs sind Arbeitsplätze und öffnen die Buchhaltung im Browser.$\r$\n$\r$\nInstallieren Sie zuerst den Server, danach die Arbeitsplätze. Administratorrechte sind nicht nötig."
 !insertmacro MUI_PAGE_WELCOME
-!insertmacro MUI_PAGE_LICENSE "${LIZENZ}"
 Page custom ModusSeite ModusSeiteVerlassen
 Page custom NetzSeite NetzSeiteVerlassen
 Page custom ServerSeite ServerSeiteVerlassen
